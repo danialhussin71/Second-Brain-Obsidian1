@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Sun, ArrowsClockwise, CaretDown, CaretUp, X, ChartBar, PenNib, Lightbulb } from "@phosphor-icons/react";
+import { Sun, ArrowsClockwise, CaretDown, CaretUp, X, ChartBar, PenNib, Lightbulb, type Icon as PhosphorIcon } from "@phosphor-icons/react";
 import { Streamdown } from "streamdown";
 
 type Brief = {
@@ -16,7 +16,7 @@ type Brief = {
 const TABS: {
   kind: Brief["kind"];
   label: string;
-  Icon: React.ElementType;
+  Icon: PhosphorIcon;
 }[] = [
   { kind: "project-pulse", label: "Pulse", Icon: ChartBar },
   { kind: "content-brief", label: "Content", Icon: PenNib },
@@ -181,12 +181,6 @@ export default function MorningBriefBanner() {
   );
 }
 
-function firstMeaningfulLine(body: string): string {
-  for (const line of body.split("\n")) {
-    const t = line.trim();
-    if (!t || t.startsWith("#")) continue;
-    return t.replace(/^[\*_]+|[\*_]+$/g, "").slice(0, 140);
-  }
 function firstMeaningfulLine(body: string): string {
   for (const line of body.split("\n")) {
     const t = line.trim();

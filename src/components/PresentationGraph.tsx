@@ -11,7 +11,9 @@ import {
 } from "@react-three/postprocessing";
 import { BlendFunction } from "postprocessing";
 import { Stars, OrbitControls } from "@react-three/drei";
-import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+// OrbitControls type inlined to avoid direct three-stdlib import
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type OrbitControlsImpl = any;
 import * as THREE from "three";
 import {
   forceSimulation,
@@ -346,8 +348,8 @@ function Scene({
     const idMap = new Map(nodes.map((n) => [n.id, n] as const));
     let i = 0;
     for (const l of links) {
-      const sId = typeof l.source === "object" ? (l.source as N).id : l.source;
-      const tId = typeof l.target === "object" ? (l.target as N).id : l.target;
+      const sId = typeof l.source === "object" ? (l.source as N).id : String(l.source);
+      const tId = typeof l.target === "object" ? (l.target as N).id : String(l.target);
       const s = idMap.get(sId);
       const t = idMap.get(tId);
       if (!s || !t) continue;

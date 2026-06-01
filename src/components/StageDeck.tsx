@@ -51,7 +51,8 @@ export default function StageDeck() {
 
   useEffect(() => {
     setStudioOn(isStudioVisible());
-    return onStudioVisibilityChange(setStudioOn);
+    const unsub = onStudioVisibilityChange(setStudioOn);
+    return () => { unsub(); };
   }, []);
 
   async function handleSave() {

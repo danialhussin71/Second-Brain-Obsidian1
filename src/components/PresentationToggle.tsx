@@ -36,7 +36,8 @@ export default function PresentationToggle() {
   // Sync state if studio is toggled elsewhere
   useEffect(() => {
     setStudioOn(isStudioVisible());
-    return onStudioVisibilityChange(setStudioOn);
+    const unsub = onStudioVisibilityChange(setStudioOn);
+    return () => { unsub(); };
   }, []);
 
   return (

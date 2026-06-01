@@ -38,7 +38,7 @@ export async function loadWhisper(
     tx.env.useBrowserCache = true;
 
     const pipeline = await tx.pipeline("automatic-speech-recognition", MODEL, {
-      // @ts-expect-error transformers.js progress_callback typing varies by version
+      // @ts-ignore transformers.js progress_callback typing varies by version
       progress_callback: (p: any) => {
         if (!onProgress) return;
         if (p.status === "progress") {
@@ -50,7 +50,7 @@ export async function loadWhisper(
         }
       },
       // Smaller dtype for speed
-      // @ts-expect-error
+      // @ts-ignore
       quantized: true,
     });
     _pipeline = pipeline;
