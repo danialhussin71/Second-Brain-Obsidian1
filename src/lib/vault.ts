@@ -215,6 +215,25 @@ export function searchNotes(notes: VaultNote[], query: string, limit = 8) {
 let cache: { notes: VaultNote[]; graph: BrainGraph; loadedAt: number } | null = null;
 const TTL_MS = 60_000;
 
+/**
+ * Fast path for the brain graph: reads the pre-built vault/_graph.json from
+ * Blob (uploaded by sync-to-blob.mjs). Returns null if not available.
+ */
+export async function readGraphFromBlob(): Promise<(BrainGraph & { noteCount: number; lastEdited: number }) | null> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
+  try {
+    const { list } = await import("@vercel/blob");
+    const token = process.env.BLOB_READ_WRITE_TOKEN!;
+    const { blobs } = await list({ prefix: "vault/_graph.json", token, limit: 1 });
+    if (!blobs.length) return null;
+    const res = await fetch(blobs[0].url, { cache: "no-store" });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function getCachedVault() {
   if (cache && Date.now() - cache.loadedAt < TTL_MS) return cache;
   const notes = await readVault();
