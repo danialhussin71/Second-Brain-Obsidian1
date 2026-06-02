@@ -490,9 +490,11 @@ export default function BrainGraph({ data, highlights = [], onNodeClick }: Props
     // re-triggering the dependency above.
   }, [highlights]);
 
+  const isEmpty = data !== null && data.nodes.length === 0;
+
   return (
     <div ref={containerRef} className="absolute inset-0">
-      {(!data || size.width === 0) && (
+      {(!data || size.width === 0) && !isEmpty && (
         <div className="flex h-full w-full items-center justify-center">
           <div className="text-center">
             <div className="text-3xl mb-2">🧠</div>
@@ -500,10 +502,25 @@ export default function BrainGraph({ data, highlights = [], onNodeClick }: Props
           </div>
         </div>
       )}
+      {isEmpty && (
+        <div className="flex h-full w-full items-center justify-center">
+          <div className="text-center max-w-sm px-4">
+            <div className="text-3xl mb-3">🧠</div>
+            <div className="text-sm font-medium text-zinc-300 mb-1">Vault not synced</div>
+            <div className="text-xs text-zinc-500 leading-relaxed">
+              Run{" "}
+              <code className="text-accent-300 bg-white/5 px-1 py-0.5 rounded">
+                node scripts/sync-to-blob.mjs
+              </code>{" "}
+              on your local machine to upload your Obsidian vault to Vercel Blob.
+            </div>
+          </div>
+        </div>
+      )}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 select-none"
-        style={{ background: BG }}
+        style={{ background: BG, display: isEmpty ? "none" : undefined }}
       />
       {hovered && data && (
         <HoverTooltip nodeId={hovered} data={data} />
