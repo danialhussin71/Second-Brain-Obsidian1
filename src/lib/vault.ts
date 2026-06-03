@@ -222,6 +222,28 @@ let cacheLoading: Promise<VaultCache> | null = null;
 // session and a cold read is slow, so cache it for hours — otherwise it perpetually re-reads.
 const TTL_MS = VAULT_PATH ? 60_000 : 6 * 60 * 60 * 1000;
 
+/**
+ * Fast path for the brain graph: reads the pre-built vault/_graph.json from
+ * Blob (uploaded by sync-to-blob.mjs). Returns null if not available.
+ */
+export async function readGraphFromBlob(): Promise<(BrainGraph & { noteCount: number; lastEdited: number }) | null> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
+  try {
+    const { list } = await import("@vercel/blob");
+    const token = process.env.BLOB_READ_WRITE_TOKEN!;
+    const { blobs } = await list({ prefix: "vault/_graph.json", token, limit: 1 });
+    if (!blobs.length) return null;
+    const res = await fetch(blobs[0].url, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function getCachedVault(): Promise<VaultCache> {
   if (cache && Date.now() - cache.loadedAt < TTL_MS) return cache;
   // Coalesce concurrent cold reads — a page load + a few API hits must NOT each re-read every blob.
