@@ -40,6 +40,20 @@ export function playClip(src: string, onEnded?: () => void) {
   audio.play().catch(() => onEnded?.());
 }
 
+/**
+ * Play a one-shot UI sound effect (e.g. the Start chime, the wake bloom). Fire-and-forget and
+ * does NOT touch the speech channel, so it layers over any greeting/answer instead of cutting it.
+ */
+export function playSfx(src: string, volume = 1) {
+  try {
+    const a = new Audio(src);
+    a.volume = volume;
+    a.play().catch(() => {});
+  } catch {
+    /* ignore — audio is non-essential */
+  }
+}
+
 /** Strip markdown / wikilinks so the spoken text reads naturally. */
 export function cleanForSpeech(text: string): string {
   return text

@@ -21,6 +21,7 @@ import AgentIcon from "@/components/AgentIcon";
 import MorningBriefBanner from "@/components/MorningBriefBanner";
 import { Kbd } from "@/components/ui/kbd";
 import { usePresentation } from "@/lib/presentation-store";
+import { playSfx } from "@/lib/tts";
 import { useVoice } from "@/lib/voice-store";
 import { parseLinkedInScope } from "@/lib/linkedin-scope";
 import { pickVisualRecall } from "@/lib/visual-recall";
@@ -340,6 +341,7 @@ export default function Home() {
     const v = useVoice.getState();
     if (st.mode === "stage" && !st.woken) {
       v.setTranscript("wake up"); // first voice note always reads "wake up"
+      playSfx("/audio/wake.mp3"); // bloom sound as the globe wakes
       st.wake();
       v.setSpeakNext(false);
       v.setPhase("idle");
@@ -463,7 +465,10 @@ export default function Home() {
           ) : (
             <button
               type="button"
-              onClick={() => usePresentation.getState().setMode("stage")}
+              onClick={() => {
+                playSfx("/audio/start.mp3"); // start chime — user gesture, always allowed
+                usePresentation.getState().setMode("stage");
+              }}
               className="group relative rounded-2xl border border-cyan-300/30 bg-gradient-to-b from-white/[0.08] to-white/[0.015] px-20 py-7 text-3xl font-light tracking-tight shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_0_70px_-14px_rgba(34,211,238,0.65)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-cyan-300/60 hover:from-white/[0.13] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_0_110px_-12px_rgba(34,211,238,0.9)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
             >
               <span className="bg-gradient-to-br from-white via-cyan-50 to-cyan-200/80 bg-clip-text text-transparent">Start</span>
