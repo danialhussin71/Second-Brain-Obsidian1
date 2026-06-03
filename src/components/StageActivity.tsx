@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { CircleNotch, Check } from "@phosphor-icons/react";
 import { usePresentation, type StageCard } from "@/lib/presentation-store";
-import { sounds } from "@/lib/sounds";
 import { cn } from "@/lib/utils";
 
 /**
@@ -68,8 +66,6 @@ export default function StageActivity() {
 
 function ActivityCard({ card, latest }: { card: StageCard; latest: boolean }) {
   const running = card.state === "running";
-  // Subtle notification as each tool-call / read card appears.
-  useEffect(() => { sounds.notify(); }, []);
   return (
     <motion.div
       layout

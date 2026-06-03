@@ -160,24 +160,8 @@ const ChatPanel = forwardRef<ChatPanelHandle, Props>(function ChatPanel(
     else void stopThinkingSwell();
   }, [isLoading, presentationOn]);
 
-  // Stage-mode audio cadence as the answer streams: chime on sentence boundary,
-  // ping on each [[wikilink]]. (Node lighting is driven by tool results, not text.)
-  useEffect(() => {
-    if (!presentationOn) return;
-    const last = messages[messages.length - 1];
-    if (!last || last.role !== "assistant") return;
-    const text = last.content;
-    const prev = lastStreamLenRef.current;
-    if (text.length <= prev) return;
-    const delta = text.slice(prev);
-    lastStreamLenRef.current = text.length;
-
-    const linkMatches = delta.match(/\[\[[^\]]+\]\]/g);
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    if (/[.!?](\s|$)/.test(delta)) sounds.cinematicChime();
-    if (linkMatches) linkMatches.forEach((_, i) => timers.push(setTimeout(() => sounds.citeNote(), i * 80)));
-    return () => { for (const t of timers) clearTimeout(t); };
-  }, [messages, presentationOn]);
+  // (Removed the per-sentence chime + per-[[wikilink]] ping that fired as the answer streamed — it
+  //  was spammy machine-gun audio during the search. Phase cues (notify) mark the beats instead.)
 
   useImperativeHandle(ref, () => ({
     ask: (prompt: string) => {

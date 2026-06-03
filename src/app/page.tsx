@@ -220,7 +220,7 @@ export default function Home() {
       // after a beat; the stage circuit holds until the next prompt.
       if (graph) {
         const isStage = usePresentation.getState().mode === "stage";
-        const { ids } = pickVisualRecall(graph, query);
+        const { ids } = pickVisualRecall(graph, query, { count: 10 });
         if (ids.length) {
           recallTimer.current = setTimeout(() => {
             if (usePresentation.getState().linkedinActive) return; // LinkedIn report owns the stage
@@ -314,7 +314,7 @@ export default function Home() {
     );
     let ids = titleToId(cited);
     if (ids.length === 0 && pathwayIdsRef.current.length === 0 && graph && lastQueryRef.current) {
-      ids = pickVisualRecall(graph, lastQueryRef.current).ids; // safety net: never leave it dark
+      ids = pickVisualRecall(graph, lastQueryRef.current, { count: 10 }).ids; // safety net: never leave it dark
     }
     if (ids.length === 0) return;
     setResearchIds((prev) => [...new Set([...prev, ...ids])]);
