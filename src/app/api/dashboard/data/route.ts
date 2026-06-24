@@ -20,14 +20,16 @@ export async function GET(req: Request) {
   if (!zapierMcpConfigured()) {
     return NextResponse.json({ live: false, note: "Zapier MCP not configured (set ZAPIER_MCP_URL)." });
   }
-  const refresh = new URL(req.url).searchParams.get("refresh") === "1";
-  if (!refresh && cache && Date.now() - cache.at < TTL_MS) {
+  const params = new URL(req.url).searchParams;
+  const refresh = params.get("refresh") === "1";
+  const debug = params.get("debug") === "1"; // returns the plan + raw tool results, skips cache
+  if (!refresh && !debug && cache && Date.now() - cache.at < TTL_MS) {
     return NextResponse.json({ live: true, data: cache.data, cached: true });
   }
   try {
-    const data = await buildLiveDashboard();
+    const data = await buildLiveDashboard({ debug });
     if (!data) return NextResponse.json({ live: false, note: "No live data available." });
-    cache = { at: Date.now(), data };
+    if (!debug) cache = { at: Date.now(), data };
     return NextResponse.json({ live: true, data });
   } catch (err) {
     // serve stale cache on error if we have one

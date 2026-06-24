@@ -67,26 +67,50 @@ export const DashboardLiveSchema = z.object({
 
 export type DashboardLive = z.infer<typeof DashboardLiveSchema> & { generatedAt: number };
 
-const PlanSchema = z.object({
+// Each call = one `execute_zapier_read_action` (the real data-fetch).
+const ExecPlanSchema = z.object({
   calls: z
     .array(
       z.object({
-        name: z.string().describe("the EXACT tool name from the catalog"),
-        argsJson: z.string().describe('a JSON object of arguments for this tool, e.g. {"instructions":"calendar events in the next 7 days"}'),
-        gets: z.string().describe("the metric this call is for, e.g. 'upcoming meetings'"),
+        selected_api: z.string().describe("the app's selected_api from the catalog, e.g. 'GoogleCalendarCLIAPI'"),
+        action: z.string().describe("the action KEY to execute, e.g. 'event_v2'"),
+        instructions: z.string().describe("natural-language scope, e.g. 'find events in the next 7 days'"),
+        output: z.string().describe("what data you want back, e.g. 'event titles, start times, attendee counts'"),
+        gets: z.string().describe("the dashboard metric this call is for, e.g. 'upcoming meetings'"),
       })
     )
-    .max(14)
-    .describe("the read-only find/list/get/search calls to run, spread across the apps"),
+    .max(12)
+    .describe("the read actions to execute, spread across the apps"),
 });
 
-const PLAN_SYSTEM = `You are assembling a live executive dashboard from a founder's connected apps (Google Calendar, Gmail, Slack, Notion, Zoom, Google Drive, LinkedIn) exposed as the Zapier tools listed below.
+const PLAN_SYSTEM = `You are assembling a live executive dashboard from a founder's connected apps via Zapier. Below is the catalog of ENABLED, READ-ONLY actions, grouped by app, each as "  • <action_key> — <Action Name>".
 
-Choose the READ-ONLY tool calls (find / list / get / search) that pull a current snapshot, and SPREAD them across ALL the apps — do NOT over-use Gmail (one Gmail count at most). Aim to cover: upcoming meetings next 7 days + the most recent past meeting (Calendar/Zoom), Slack message/channel activity, Notion docs created/edited, Drive files added, LinkedIn recent posts + reach, and a single email count. Use each tool's natural-language argument (usually "instructions") to say what you want, e.g. "events in the next 7 days". METRICS ONLY — never request message bodies, full inboxes, or contact lists. Return up to ~12 calls.`;
+Pick the actions to EXECUTE (via execute_zapier_read_action) that fetch a current snapshot, SPREAD across the apps (do NOT over-use Gmail — one Gmail call at most). For each chosen action return its app's selected_api, the action key, a natural-language "instructions" scope, an "output" describing the fields you want, and "gets" (the metric).
 
-const SHAPE_SYSTEM = `Turn the tool results into the dashboard JSON. Use ONLY data actually present in the results — never invent or estimate numbers; if a result errored or was empty, just leave it out. Keep it strictly PII-free: no email addresses, phone numbers, or message bodies; attendee COUNTS only, never names.
+Cover, ONE call each where a suitable action exists:
+- Calendar: the "Find Events" action for the NEXT 7 DAYS (this is the meetings list).
+- Zoom: a "Find/List Meeting(s)" action.
+- Slack: a "Find Message" / "Find Public/Private Channel" / "Find User" style action that returns multiple records.
+- Notion: a "Find Page" / "Search" / "Find Database Item" action (NOT "by title/id").
+- LinkedIn: only if there is a real find/get-activity action; otherwise SKIP LinkedIn.
+- Gmail: ONE "Find Email" action for recent mail (count only) — no bodies.
 
-DIVERSITY RULE: the 4 KPIs must come from at least 3 DIFFERENT apps (set each KPI's "source"), and the mini-stats + activity must also span multiple apps. Do NOT let Gmail dominate — at most one Gmail KPI. Prefer a mix: Meetings (Calendar/Zoom), Slack messages, Notion docs, Drive files, LinkedIn reach, one Emails count.`;
+STRONG action-selection rules:
+- PREFER actions named "Find …", "List …", "Search …" that return MULTIPLE records.
+- AVOID any action ending in "by ID", "by Title", "by Name", or "Retrieve … by …" — they need a specific identifier you don't have.
+- NEVER pick "Make API Request" / "_zap_raw_request" / raw HTTP actions.
+- If an app has no good find/list/search action, SKIP that app rather than forcing a bad call.
+
+Return up to ~7 calls. METRICS ONLY — never request message bodies or contact lists.`;
+
+const SHAPE_SYSTEM = `Turn the EXECUTION RESULTS below into the dashboard JSON. Each result has the metric it was "for", and the records the action returned (with a count). Use ONLY what the actions actually RETURNED — never invent, estimate, or guess a number.
+
+Build:
+- meetings.upcoming from the Calendar/Zoom records (title + start time + attendee count + platform), soonest first; meetings.last = the most recent past meeting if present, else null. If those records are empty, return upcoming:[] and last:null — do NOT fabricate meetings.
+- KPIs + mini-stats from the COUNTS of real records (e.g. "Meetings this week" = number of calendar events, "Slack messages" = count returned, "Notion pages" = count, "LinkedIn reach" if a number was returned, one "Emails (7d)" count).
+- activity from one short metric line per app that returned data.
+
+CRITICAL: never report counts of Zapier "actions / enabled tools / integrations / configured" items — those are NOT data. If an action errored or returned an empty/zero result, OMIT that app — it is correct to return fewer than 4 KPIs (even an empty array) and an empty meetings list. PII-free: no emails, phones, message bodies; attendee COUNTS only, never names; never show the selected_api.`;
 
 /** Strip any email that slipped through (belt-and-suspenders on top of the prompt rules). */
 function scrubPii<T>(value: T): T {
@@ -106,52 +130,87 @@ function scrubPii<T>(value: T): T {
   return walk(value);
 }
 
-export async function buildLiveDashboard(): Promise<DashboardLive | null> {
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export type DashboardDebug = {
+  apps: any[];
+  catalog: string;
+  plan: any[];
+  results: any[];
+};
+
+export async function buildLiveDashboard(opts: { debug?: boolean } = {}): Promise<(DashboardLive & { _debug?: DashboardDebug }) | null> {
   if (!zapierMcpConfigured()) return null;
   // Hard timeout (below the function's maxDuration) so the route always answers
   // gracefully instead of 502-ing when the apps are slow.
-  return withTimeout(gatherDashboard(), 150_000);
+  return withTimeout(gatherDashboard(opts.debug ?? false), 150_000);
 }
 
-async function gatherDashboard(): Promise<DashboardLive | null> {
+async function gatherDashboard(debug: boolean): Promise<(DashboardLive & { _debug?: DashboardDebug }) | null> {
   return withZapierSession(async ({ tools, call }) => {
-    if (!tools.length) return null;
+    // This is Zapier's dynamic interface: list apps → drill each for read-action
+    // keys → execute_zapier_read_action per metric. (No static per-app tools.)
+    if (!tools.some((t) => t.name === "execute_zapier_read_action")) return null;
 
-    // 1. PLAN — one Opus call lists the tools and picks which to call.
-    const catalog = tools
-      .map((t) => `- ${t.name}: ${(t.description || "").slice(0, 140)}`)
-      .join("\n")
-      .slice(0, 14000);
+    // 1. DISCOVER — the enabled apps, then each app's READ actions (in parallel).
+    const appsRes = await call("list_enabled_zapier_actions", {});
+    const apps: any[] = (appsRes.data as any)?.apps ?? [];
+    if (!apps.length) return null;
+    const drilled = await mapLimit(apps, 4, async (a) => {
+      const r = await call("list_enabled_zapier_actions", { selected_api: a.selected_api });
+      const arr = Array.isArray(r.data) ? (r.data as any[]) : [];
+      const actions = ((arr[0]?.actions ?? []) as any[]).filter((x) => x.tool === "execute_zapier_read_action");
+      return { app: a.app, selected_api: a.selected_api, actions: actions.map((x) => ({ key: x.key, name: x.name })) };
+    });
+    const catalog = drilled
+      .filter((d) => d.actions.length)
+      .map((d) => `App: ${d.app} (selected_api: ${d.selected_api})\n` + d.actions.map((x) => `  • ${x.key} — ${x.name}`).join("\n"))
+      .join("\n\n")
+      .slice(0, 16000);
+
+    // 2. PLAN — Opus picks which read actions to execute.
     const { object: plan } = await generateObject({
       model: model(),
-      schema: PlanSchema,
-      maxTokens: 1600,
+      schema: ExecPlanSchema,
+      maxTokens: 1800,
       system: PLAN_SYSTEM,
-      prompt: `Available tools:\n${catalog}`,
+      prompt: `Enabled read actions, grouped by app:\n\n${catalog}`,
     });
 
-    // 2. EXECUTE — run the chosen calls CONCURRENTLY over the single connection.
-    const results = await mapLimit(plan.calls.slice(0, 14), 5, async (c) => {
-      let args: Record<string, unknown> = {};
-      try {
-        args = JSON.parse(c.argsJson);
-      } catch {
-        /* some tools accept empty args */
-      }
-      const r = await call(c.name, args);
-      return { tool: c.name, for: c.gets, ok: r.ok, data: r.ok ? r.data : { error: r.error } };
+    // 3. EXECUTE — run each read action and keep the returned records (+ count).
+    // Capped + concurrent: each execute hits a live app, so keep the set tight.
+    const results = await mapLimit(plan.calls.slice(0, 6), 4, async (c) => {
+      const r = await call("execute_zapier_read_action", {
+        selected_api: c.selected_api,
+        action: c.action,
+        instructions: c.instructions,
+        params: {},
+        output: c.output,
+      });
+      const d = r.data as any;
+      const records = Array.isArray(d?.results) ? d.results : d?.results != null ? [d.results] : [];
+      const failed = !r.ok || d?.error || d?.execution?.status === "ERROR";
+      return {
+        for: c.gets,
+        ok: !failed,
+        count: failed ? null : records.length,
+        records: records.slice(0, 6),
+        error: failed ? r.error || d?.error || "execution error" : undefined,
+      };
     });
 
-    // 3. SHAPE — one Opus call turns the raw results into the dashboard JSON.
+    // 4. SHAPE — Opus turns the execution results into the dashboard JSON.
     const raw = JSON.stringify(results).slice(0, 45000);
     const { object } = await generateObject({
       model: model(),
       schema: DashboardLiveSchema,
       maxTokens: 1800,
       system: SHAPE_SYSTEM,
-      prompt: `Tool results from the founder's connected apps:\n${raw}`,
+      prompt: `Execution results from the founder's connected apps:\n${raw}`,
     });
 
-    return { ...scrubPii(object), generatedAt: Date.now() };
+    const out: DashboardLive & { _debug?: DashboardDebug } = { ...scrubPii(object), generatedAt: Date.now() };
+    if (debug) out._debug = { apps, catalog, plan: plan.calls, results };
+    return out;
   });
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
