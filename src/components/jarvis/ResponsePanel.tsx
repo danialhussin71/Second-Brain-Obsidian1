@@ -75,7 +75,7 @@ export default function ResponsePanel({ state }: { state: JarvisRunState }) {
             </motion.div>
           ) : activeKey === "report" && blocks.length > 0 ? (
             <motion.div key="report" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
-              <div ref={scrollRef} data-lenis-prevent className="h-full overflow-y-auto bg-gradient-to-b from-white/[0.055] via-white/[0.02] to-transparent px-4 py-4 text-[13.5px] leading-relaxed">
+              <div ref={scrollRef} data-lenis-prevent className="h-full overflow-y-auto bg-gradient-to-b from-white/[0.08] via-white/[0.03] to-transparent px-4 py-4 text-[13.5px] leading-relaxed">
                 <Blocks blocks={blocks} stream scrollRef={scrollRef} />
               </div>
             </motion.div>

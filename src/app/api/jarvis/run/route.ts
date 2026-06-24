@@ -2,7 +2,7 @@ import { generateObject, generateText } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import { anthropicFetch } from "@/lib/anthropic-fetch";
-import { readBusinessDoc, defaultClient } from "@/lib/client-knowledge";
+import { readBusinessDoc } from "@/lib/client-knowledge";
 import {
   keywordRoute,
   node,
@@ -22,13 +22,10 @@ import {
   type JarvisNodeId,
 } from "@/lib/jarvis-events";
 import { CORE_BLOCK_GRAMMAR } from "@/lib/block-grammar";
-import { carouselSlidePrompt, generateImage, generateImageWithRefs, imageModelConfigured } from "@/lib/openai-image";
-import { getBrandKit, loadBrandFace, loadBrandTemplate, slideRole, brandCarouselSlidePrompt } from "@/lib/brand-kit";
 import { scrapeLinkedInLeads, MAX_LEADS } from "@/lib/lead-scraper";
 import { enrichLeads, type EnrichedLead } from "@/lib/lead-enrichment";
 import { leadsTestMode } from "@/lib/lead-fixtures";
 import { NO_EMDASH_RULE, deDash, stripEmDashes } from "@/lib/sanitize";
-import { mapLimit } from "@/lib/concurrency";
 import { runWebSearch } from "@/lib/research-tools";
 import { searchVault } from "@/lib/brain-vault";
 import { getContentGuide } from "@/lib/content-guides";
@@ -346,9 +343,6 @@ async function runCarousel(
     caption: "Most founders are one clear story away from being undeniable. Here's the shift.",
     grounding,
   };
-  let slideMeta: { layout: "split" | "stacked" | "statement"; visual: string; logos: string[] }[] | null = null;
-  let styleBible = "";
-
   try {
     const { object: rawObject } = await generateObject({
       model: model(),
@@ -371,12 +365,19 @@ async function runCarousel(
     data = {
       topic: object.topic,
       hook: object.hook,
-      slides: object.slides.map((s, i) => ({ n: i + 1, kind: s.kind, title: s.title, body: s.body })),
+      slides: object.slides.map((s, i) => ({
+        n: i + 1,
+        kind: s.kind,
+        title: s.title,
+        body: s.body,
+        layout: s.layout,
+        visual: s.visual,
+        logos: s.logos,
+      })),
       caption: object.caption,
       grounding,
+      styleBible: object.styleBible,
     };
-    slideMeta = object.slides.map((s) => ({ layout: s.layout, visual: s.visual, logos: s.logos }));
-    styleBible = object.styleBible;
   } catch {
     /* keep grounded fallback */
   }
@@ -386,82 +387,14 @@ async function runCarousel(
   emit({ type: "agent.output", node: "carousel", summary: `${data.slides.length} slides on "${data.topic}"`, at: now() });
   await beat(200);
 
-  // Render the real visuals FIRST — we only surface the carousel once the
-  // gpt-image slides are ready (no flash of the plain text deck). Falls back to
-  // the text deck only if image generation is unavailable or fails.
-  let emitted = false;
-  if (slideMeta && imageModelConfigured()) {
-    // On-brand path: load the founder's brand kit + face so every slide matches
-    // their locked style and carries their likeness (header avatar + cover/closing
-    // cutout) via gpt-image-2 edits. Falls back to the generic style-bible render.
-    const client = await defaultClient();
-    const brand = await getBrandKit(client);
-    const face = brand ? await loadBrandFace(brand) : null;
-    // Locked style reference (the founder's canonical carousel) — attached to every
-    // slide gen so the header + slide number reproduce exactly.
-    const template = brand ? await loadBrandTemplate(client) : null;
-    const onBrand = Boolean(brand && face);
-    const quality = (process.env.OPENAI_IMAGE_QUALITY as "low" | "medium" | "high" | "auto") || "high";
-
-    emit({
-      type: "agent.status",
-      node: "carousel",
-      status: onBrand ? `Rendering slides in ${brand!.displayName ?? "your"} brand style · gpt-image` : "Rendering slide visuals · gpt-image",
-      at: now(),
-    });
-    emit({
-      type: "agent.tool",
-      node: "carousel",
-      tool: "gpt-image",
-      detail: onBrand ? `${data.slides.length} slides · ${brand!.displayName ?? "brand"} style + face reference` : `rendering ${data.slides.length} slides`,
-      at: now(),
-    });
-    const total = data.slides.length;
-    // Render slides concurrently, but capped so we stay under the image API's
-    // concurrent-request limit (configurable via OPENAI_IMAGE_CONCURRENCY).
-    // Render all slides in ONE parallel wave by default (so a bigger deck still
-    // finishes within the function budget); OPENAI_IMAGE_CONCURRENCY can cap it if
-    // the OpenAI tier rate-limits concurrent image requests.
-    const imageConcurrency = Math.max(1, Number(process.env.OPENAI_IMAGE_CONCURRENCY) || total);
-    const images = await mapLimit(data.slides, imageConcurrency, (s, i) => {
-      const m = slideMeta![i] ?? { layout: "stacked" as const, visual: "", logos: [] };
-      return onBrand
-        ? generateImageWithRefs(
-            brandCarouselSlidePrompt({
-              kit: brand!,
-              index: i,
-              total,
-              role: slideRole(i, total),
-              layout: m.layout,
-              title: s.title,
-              body: s.body,
-              visual: m.visual,
-              logos: m.logos,
-              topic: data.topic,
-              styleRef: Boolean(template),
-            }),
-            [face!, ...(template ? [template] : [])],
-            { quality, size: "1088x1360" }
-          )
-        : generateImage(
-            carouselSlidePrompt({ index: i + 1, total, title: s.title, body: s.body, art: m.visual, styleBible, topic: data.topic }),
-            { quality, size: "1088x1360" }
-          );
-    });
-    if (images.some(Boolean)) {
-      data = { ...data, slides: data.slides.map((s, i) => ({ ...s, image: images[i] ?? undefined })) };
-      emit({ type: "agent.status", node: "carousel", status: "Visuals rendered", at: now() });
-      emit({ type: "artifact", kind: "carousel", data, at: now() });
-      emitted = true;
-      await beat(250);
-    }
-  }
-
-  if (!emitted) {
-    // image model unconfigured or every slide failed — surface the text deck so the run still delivers
-    emit({ type: "artifact", kind: "carousel", data, at: now() });
-    await beat(200);
-  }
+  // Image generation now runs CLIENT-SIDE — each slide is rendered by the browser
+  // via POST /api/carousel/image (with per-image retries), so a large deck never
+  // hits the serverless timeout and we NEVER fall back to a text/HTML deck. We emit
+  // the written deck carrying each slide's prompt metadata; CarouselArtifact renders
+  // the gpt-image visuals and retries any that fail.
+  emit({ type: "agent.status", node: "carousel", status: "Deck ready · rendering visuals", at: now() });
+  emit({ type: "artifact", kind: "carousel", data, at: now() });
+  await beat(200);
 
   emit({ type: "agent.report", from: "carousel", to: "content", summary: "Carousel delivered", at: now() });
   await beat(450);

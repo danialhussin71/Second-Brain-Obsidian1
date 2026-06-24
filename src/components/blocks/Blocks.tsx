@@ -194,15 +194,15 @@ const proseMd = {
   h2: (p: MdProps) => (
     <h2 className="mb-[0.5em] mt-[1.3em] text-[0.72em] font-semibold uppercase tracking-[0.18em] text-cyan-300/80 first:mt-0" {...strip(p)} />
   ),
-  h3: (p: MdProps) => <h3 className="mb-[0.2em] mt-[0.9em] text-[1.02em] font-semibold text-white/90" {...strip(p)} />,
-  p: (p: MdProps) => <p className="my-[0.5em] text-[1em] leading-[1.5] text-white/85" {...strip(p)} />,
-  ul: (p: MdProps) => <ul className="my-[0.5em] list-disc space-y-[0.3em] pl-[1.25em] text-[1em] marker:text-cyan-300/70" {...strip(p)} />,
-  ol: (p: MdProps) => <ol className="my-[0.5em] list-decimal space-y-[0.3em] pl-[1.25em] text-[1em] marker:text-cyan-400/60" {...strip(p)} />,
-  li: (p: MdProps) => <li className="text-[1em] leading-[1.5] text-white/85" {...strip(p)} />,
+  h3: (p: MdProps) => <h3 className="mb-[0.2em] mt-[0.9em] text-[1.02em] font-semibold text-white/95" {...strip(p)} />,
+  p: (p: MdProps) => <p className="my-[0.5em] text-[1em] leading-[1.5] text-white/90" {...strip(p)} />,
+  ul: (p: MdProps) => <ul className="my-[0.5em] list-disc space-y-[0.3em] pl-[1.25em] text-[1em] marker:text-cyan-300/80" {...strip(p)} />,
+  ol: (p: MdProps) => <ol className="my-[0.5em] list-decimal space-y-[0.3em] pl-[1.25em] text-[1em] marker:text-cyan-400/70" {...strip(p)} />,
+  li: (p: MdProps) => <li className="text-[1em] leading-[1.5] text-white/90" {...strip(p)} />,
   strong: (p: MdProps) => <strong className="font-semibold text-white" {...strip(p)} />,
-  em: (p: MdProps) => <em className="italic text-white/85" {...strip(p)} />,
+  em: (p: MdProps) => <em className="italic text-white/90" {...strip(p)} />,
   a: Anchor,
-  blockquote: (p: MdProps) => <blockquote className="my-[0.5em] border-l-2 border-cyan-300/30 pl-[0.75em] text-white/70" {...strip(p)} />,
+  blockquote: (p: MdProps) => <blockquote className="my-[0.5em] border-l-2 border-cyan-300/40 pl-[0.75em] text-white/80" {...strip(p)} />,
   hr: () => <hr className="my-[0.8em] border-white/10" />,
   ...mdTable,
 };

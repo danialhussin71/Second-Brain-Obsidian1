@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type PanInfo } from "motion/react";
 import { CaretLeft, CaretRight, Copy, Check, Sparkle, ArrowsOut, ArrowsIn, DownloadSimple, FileText, FilePdf, FileZip } from "@phosphor-icons/react";
@@ -28,14 +28,98 @@ const variants = {
 const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "carousel";
 const pad = (n: number) => String(n).padStart(2, "0");
 
+// Client-generated slide images, cached across mounts (so switching tabs doesn't
+// re-render the whole deck) and de-duped while a request is in flight.
+const carouselImageCache = new Map<string, string>();
+const carouselInFlight = new Set<string>();
+const slideCacheKey = (topic: string, idx: number, title: string) => `${topic}::${idx}::${title}`;
+
 export default function CarouselArtifact({ data }: { data: CarouselArtifactData }) {
   const [[i, dir], setPos] = useState<[number, number]>([0, 0]);
   const [copied, setCopied] = useState(false);
   const [full, setFull] = useState(false);
-  const n = data.slides.length;
-  const slide = data.slides[i];
+  // client-rendered slide images (idx → data URL) + per-slide status
+  const [genImages, setGenImages] = useState<Record<number, string>>({});
+  const [genState, setGenState] = useState<Record<number, "loading" | "error">>({});
+
+  // merge any server image (rare now) with the client-generated ones
+  const slides = useMemo(
+    () => data.slides.map((s, idx) => ({ ...s, image: s.image ?? genImages[idx] })),
+    [data.slides, genImages]
+  );
+  const n = slides.length;
+  const slide = slides[i];
   const accent = ACCENT[slide?.kind ?? "body"] ?? "#a78bfa";
-  const hasVisuals = data.slides.some((s) => s.image);
+  const hasVisuals = slides.some((s) => s.image);
+
+  // Render ONE slide via the per-image endpoint, retrying up to 3× on failure.
+  const genOne = useCallback(
+    async (idx: number) => {
+      const s = data.slides[idx];
+      if (!s || s.image) return;
+      const key = slideCacheKey(data.topic, idx, s.title);
+      const cached = carouselImageCache.get(key);
+      if (cached) {
+        setGenImages((p) => ({ ...p, [idx]: cached }));
+        setGenState((p) => { const nx = { ...p }; delete nx[idx]; return nx; });
+        return;
+      }
+      if (carouselInFlight.has(key)) return;
+      carouselInFlight.add(key);
+      setGenState((p) => ({ ...p, [idx]: "loading" }));
+      try {
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const res = await fetch("/api/carousel/image", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                topic: data.topic,
+                total: data.slides.length,
+                styleBible: data.styleBible ?? "",
+                slide: { index: idx, kind: s.kind, title: s.title, body: s.body, layout: s.layout, visual: s.visual, logos: s.logos },
+              }),
+            });
+            const j = (await res.json().catch(() => ({}))) as { image?: string };
+            if (res.ok && j.image) {
+              carouselImageCache.set(key, j.image);
+              setGenImages((p) => ({ ...p, [idx]: j.image! }));
+              setGenState((p) => { const nx = { ...p }; delete nx[idx]; return nx; });
+              return;
+            }
+          } catch {
+            /* network blip — fall through to the next attempt */
+          }
+          if (attempt < 3) await new Promise((r) => setTimeout(r, 700 * attempt));
+        }
+        setGenState((p) => ({ ...p, [idx]: "error" }));
+      } finally {
+        carouselInFlight.delete(key);
+      }
+    },
+    [data]
+  );
+
+  // Kick off generation for every slide missing an image (bounded concurrency).
+  useEffect(() => {
+    const needs = data.slides.map((_, idx) => idx).filter((idx) => {
+      if (data.slides[idx].image) return false;
+      const cached = carouselImageCache.get(slideCacheKey(data.topic, idx, data.slides[idx].title));
+      if (cached) {
+        setGenImages((p) => (p[idx] ? p : { ...p, [idx]: cached }));
+        return false;
+      }
+      return true;
+    });
+    if (!needs.length) return;
+    const CONC = 3;
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < needs.length) await genOne(needs[cursor++]);
+    };
+    Array.from({ length: Math.min(CONC, needs.length) }, () => worker());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, genOne]);
 
   const clamp = (v: number) => Math.min(n - 1, Math.max(0, v));
   const go = (d: number) => setPos(([p]) => [clamp(p + d), d]);
@@ -69,7 +153,7 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
 
   const downloadAll = () => {
     const files: Record<string, Uint8Array> = {};
-    data.slides.forEach((s, idx) => {
+    slides.forEach((s, idx) => {
       if (!s.image || !s.image.startsWith("data:")) return;
       const b64 = s.image.split(",")[1] ?? "";
       try {
@@ -85,11 +169,11 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
   // PDF deck — one slide per page at the image's native size. pdf-lib is loaded
   // lazily so it never weighs down the rest of the panel.
   const downloadPdf = async () => {
-    const slides = data.slides.filter((s) => s.image?.startsWith("data:"));
-    if (!slides.length) return;
+    const imgSlides = slides.filter((s) => s.image?.startsWith("data:"));
+    if (!imgSlides.length) return;
     const { PDFDocument } = await import("pdf-lib");
     const doc = await PDFDocument.create();
-    for (const s of slides) {
+    for (const s of imgSlides) {
       try {
         const bytes = Uint8Array.from(atob(s.image!.split(",")[1] ?? ""), (c) => c.charCodeAt(0));
         const png = await doc.embedPng(bytes);
@@ -164,10 +248,30 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
                   className="pointer-events-none absolute inset-0 h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full flex-col justify-center p-7">
-                  <div className="mb-4 h-1 w-12 rounded-full" style={{ background: accent, boxShadow: `0 0 14px ${accent}` }} />
-                  <h3 className="text-[27px] font-bold leading-[1.08] tracking-tight text-white">{slide?.title}</h3>
-                  <p className="mt-4 text-[15px] leading-relaxed text-white/72">{slide?.body}</p>
+                <div className="flex h-full flex-col items-center justify-center gap-4 px-7 text-center">
+                  {genState[i] === "error" ? (
+                    <>
+                      <Sparkle size={26} weight="fill" style={{ color: accent }} className="opacity-70" />
+                      <div className="text-[13px] text-white/70">This slide didn&apos;t render.</div>
+                      <button
+                        onClick={() => genOne(i)}
+                        className="rounded-lg border border-white/15 bg-white/[0.07] px-3.5 py-1.5 text-[12px] font-medium text-white/85 transition hover:border-white/30 hover:text-white"
+                      >
+                        Retry slide
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        className="h-9 w-9 animate-spin rounded-full border-2 border-white/15"
+                        style={{ borderTopColor: accent }}
+                      />
+                      <div className="text-[12.5px] font-medium text-white/65">
+                        Rendering slide {i + 1} of {n}…
+                      </div>
+                      <div className="text-[11px] tracking-wide text-white/35">on-brand · gpt-image</div>
+                    </>
+                  )}
                 </div>
               )}
               {/* glass edge: hairline ring + a whisper of top light */}
@@ -214,7 +318,7 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
       className="flex shrink-0 items-center gap-2.5 overflow-x-auto border-t border-white/8 px-4 py-3"
       style={{ maskImage: "linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 16px), transparent)", WebkitMaskImage: "linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 16px), transparent)" }}
     >
-      {data.slides.map((s, k) => {
+      {slides.map((s, k) => {
         const a = ACCENT[s.kind] ?? "#a78bfa";
         const on = k === i;
         return (

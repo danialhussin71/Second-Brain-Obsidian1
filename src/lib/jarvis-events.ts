@@ -43,6 +43,10 @@ export type CarouselSlide = {
   body: string;
   /** a generated slide image (data URL), when the image model is configured */
   image?: string;
+  /** per-slide prompt metadata — the CLIENT uses these to render each image */
+  layout?: "split" | "stacked" | "statement";
+  visual?: string;
+  logos?: string[];
 };
 
 export type CarouselArtifactData = {
@@ -52,6 +56,8 @@ export type CarouselArtifactData = {
   caption: string;
   /** doc titles the work was grounded in (for the "what it read" trail) */
   grounding: string[];
+  /** the shared visual style paragraph — passed to the per-slide image endpoint */
+  styleBible?: string;
 };
 
 /** One scraped prospect, flattened for the deliverable sheet. */
