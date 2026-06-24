@@ -128,7 +128,7 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
       <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
         <NavButton side="left" onClick={() => go(-1)} disabled={i === 0} />
 
-        <div className={cn("relative aspect-[2/3] h-full w-auto", large ? "max-h-[80vh]" : "max-h-[438px]")}>
+        <div className={cn("relative aspect-[4/5] h-full w-auto", large ? "max-h-[80vh]" : "max-h-[438px]")}>
           {/* floor glow — the slide reads as a floating object */}
           <div
             className="pointer-events-none absolute -bottom-4 left-1/2 h-8 w-[82%] -translate-x-1/2 rounded-[50%]"
@@ -223,7 +223,7 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
             onClick={() => jump(k)}
             whileHover={{ y: -2 }}
             whileTap={{ scale: 0.94 }}
-            className={cn("relative aspect-[2/3] h-14 shrink-0 overflow-hidden rounded-lg border transition", on ? "" : "opacity-45 hover:opacity-90")}
+            className={cn("relative aspect-[4/5] h-14 shrink-0 overflow-hidden rounded-lg border transition", on ? "" : "opacity-45 hover:opacity-90")}
             style={{ borderColor: on ? a : "rgba(255,255,255,0.10)", boxShadow: on ? `0 6px 22px -8px ${a}99, 0 0 0 1.5px ${a}` : "none" }}
           >
             {s.image ? (

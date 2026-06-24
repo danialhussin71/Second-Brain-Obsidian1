@@ -118,6 +118,22 @@ export async function loadBrandFace(kit: BrandKit): Promise<RefImage | null> {
   return null;
 }
 
+/**
+ * The locked STYLE-REFERENCE image (the founder's canonical carousel cover). Passed
+ * as a brand-template ref on EVERY slide gen call so the header + slide number
+ * reproduce exactly. Read from disk (committed + traced into the function bundle
+ * via next.config outputFileTracingIncludes).
+ */
+export async function loadBrandTemplate(client: string): Promise<RefImage | null> {
+  try {
+    const abs = path.join(process.cwd(), "content", "branding", client, "reference.png");
+    const buf = await fs.readFile(abs);
+    return { data: new Uint8Array(buf), name: "style-reference.png", type: "image/png" };
+  } catch {
+    return null;
+  }
+}
+
 /* --------------------------- writes (settings UI) --------------------------- */
 
 export type BrandKitFields = Partial<{
@@ -206,23 +222,26 @@ export function brandCarouselSlidePrompt(args: {
   visual: string;
   logos: string[];
   topic: string;
+  /** true when the founder's canonical carousel is attached as a style ref */
+  styleRef?: boolean;
 }): string {
-  const { kit, index, total, role, layout, title, body, visual, logos, topic } = args;
+  const { kit, index, total, role, layout, title, body, visual, logos, topic, styleRef } = args;
   const who = kit.displayName || "the founder";
   const tagline = kit.tagline || "";
 
   // REPEATABLE ELEMENTS — described explicitly + identically so the branding
   // renders the same on every slide (one cohesive template, not a redesign each time).
+  const accent = kit.accentHex;
   const repeatable =
-    `REPEATABLE ELEMENTS — render these IDENTICALLY on EVERY slide (exact same position, sizes, fonts, colours and text) so the whole deck reads as ONE cohesive template: ` +
-    `(1) TOP-LEFT a circular avatar photo of ${who}, about 80px in diameter, with the photo set on a SOLID crimson ${kit.accentHex} background (fill the circle's backdrop with ${kit.accentHex} — NOT white) and a thin ${kit.accentHex} ring; ` +
-    `(2) immediately to its right the name "${who}" in BOLD WHITE at about 30px` +
+    `REPEATABLE TEMPLATE ELEMENTS. These five elements form a FIXED template on a 1088x1360 portrait (4:5) canvas. Every one must render PIXEL-IDENTICALLY on EVERY slide: the same exact position, size, font, weight, colour and shape, with ONLY the slide-number digit changing. Reproduce each precisely, with zero creative variation and zero guesswork:\n` +
+    `1) AVATAR, top-left: a circular photo of ${who}, exactly 88px in diameter, inset 56px from the top edge and 56px from the left edge. ${who}'s head fills the circle; any backdrop behind the head is filled SOLID crimson ${accent} (never white, never transparent). A 3px solid crimson ${accent} ring outlines the circle.\n` +
+    `2) NAME, immediately to the right of the avatar with a 16px gap, top-aligned to the avatar: the exact text "${who}" at 32px, BOLD (weight 700), pure white #FFFFFF, in a rounded geometric sans-serif (Poppins).\n` +
     (tagline
-      ? `, and directly beneath the name the subtitle "${tagline}" in light grey (#CFCFCF) at about 18px, wrapped to EXACTLY TWO lines — never one, never three — with the line break kept at the same word on every slide`
+      ? `3) TAGLINE, directly beneath the name with its left edge flush under the name: the exact text "${tagline}" at 18px, REGULAR (weight 400), light grey #CFCFCF, same Poppins sans-serif, wrapped to EXACTLY TWO lines (never one, never three), breaking at the same word on every slide.\n`
       : "") +
-    `; (3) TOP-RIGHT the word "REPOST" in bold condensed white capitals at about 26px, beside a repost / retweet double-arrow icon; ` +
-    `(4) the white slide number "${index + 1}" at about 38px in the BOTTOM-RIGHT corner. ` +
-    `Do NOT move, restyle, resize or redesign these from slide to slide — keep them pixel-consistent.`;
+    `4) REPOST BADGE, top-right, its right edge inset 56px from the right edge and 56px from the top: a white repost / retweet icon (two arrows curving into a closed loop), 22px tall, immediately followed by the exact word "REPOST" at 24px, BOLD CONDENSED, pure white #FFFFFF, ALL-CAPS, in a heavy condensed grotesque (Druk / Anton).\n` +
+    `5) SLIDE NUMBER, bottom-right: the numeral "${index + 1}" ONLY (no leading zero, no slash, no total, no word, no symbol) at 48px, BOLD CONDENSED, pure white #FFFFFF, in the SAME heavy condensed grotesque as the headlines (Druk / Anton), with NO background, box, circle, pill or container behind it. Its baseline is inset exactly 56px from the bottom edge and its right edge 56px from the right edge. Across the deck only the digit changes; its size, font, weight, colour and position are identical on every slide.\n` +
+    `Treat all five as a LOCKED frame: do not move, resize, recolour, restyle, add to, or redesign any of them between slides.`;
 
   let layoutLine: string;
   if (role === "cover") {
@@ -246,6 +265,9 @@ export function brandCarouselSlidePrompt(args: {
     "",
     repeatable,
     "",
+    styleRef
+      ? `STYLE REFERENCE IMAGE (attached): a reference image of the founder's canonical carousel is provided. Match the HEADER (avatar + name + tagline + REPOST badge) and the bottom-right SLIDE NUMBER to that reference EXACTLY: identical layout, fonts, weights, colours, sizes and positions, and the same black background with the crimson glow. Use the reference ONLY for the brand template, header and number. Generate fresh, NEW content for this slide (do NOT copy its headline, body text, logos or imagery).`
+      : "",
     layoutLine,
     `Carousel topic: ${topic}.`,
     `HEADLINE (render VERBATIM in the condensed all-caps style, key word(s) in crimson ${kit.accentHex}): "${title}".`,

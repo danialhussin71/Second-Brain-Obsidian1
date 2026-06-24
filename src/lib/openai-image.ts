@@ -10,7 +10,9 @@
 const ENDPOINT = "https://api.openai.com/v1/images/generations";
 const EDIT_ENDPOINT = "https://api.openai.com/v1/images/edits";
 
-export type ImageSize = "1024x1024" | "1024x1536" | "1536x1024" | "auto";
+// gpt-image-2 accepts any size where BOTH dims are divisible by 16. 1088x1360 is
+// the exact 4:5 portrait (the founder's carousel format); 1024x1536 is 2:3.
+export type ImageSize = "1024x1024" | "1024x1536" | "1088x1360" | "1536x1024" | "auto";
 
 export function imageModelConfigured(): boolean {
   return Boolean(process.env.OPENAI_API_KEY);
@@ -38,7 +40,7 @@ export async function generateImageWithRefs(
     const form = new FormData();
     form.append("model", model);
     form.append("prompt", prompt);
-    form.append("size", opts?.size || "1024x1536");
+    form.append("size", opts?.size || "1088x1360");
     form.append("quality", quality);
     form.append("n", "1");
     refs.forEach((r, i) => {
@@ -84,7 +86,7 @@ export async function generateImage(
       body: JSON.stringify({
         model,
         prompt,
-        size: opts?.size || "1024x1536",
+        size: opts?.size || "1088x1360",
         quality,
         n: 1,
       }),

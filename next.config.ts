@@ -13,6 +13,9 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/agents/chat": ["./content/knowledge/**/*"],
     "/api/brain": ["./content/knowledge/**/*"],
+    // Carousel gen reads the founder's face + locked style-reference from disk;
+    // ship them with the Jarvis function so the on-brand path works in prod.
+    "/api/jarvis/run": ["./content/branding/**/*"],
   },
   // `onnxruntime-node` (354 MB on Linux) is a transitive dep of
   // `@huggingface/transformers`, which we only use for IN-BROWSER Whisper STT

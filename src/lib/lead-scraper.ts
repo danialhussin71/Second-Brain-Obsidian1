@@ -247,8 +247,31 @@ export function normalizeLead(item: Record<string, any>): Lead {
 
 /* ------------------------------ scrape ------------------------------ */
 
+/**
+ * Progressive search-broadening plan. Pass 0 is the exact ICP; each later pass
+ * relaxes the most peripheral filter (company size + signals, then function,
+ * then seniority) while ALWAYS keeping the core ICP (job titles, search query,
+ * locations). We only top up to the requested count from these — we never drop
+ * the role itself, so the leads stay on-ICP.
+ */
+function scrapePasses(f: LeadFilters): LeadFilters[] {
+  const passes: LeadFilters[] = [f];
+  const canBroaden =
+    (f.companySize?.length ?? 0) > 0 ||
+    (f.functions?.length ?? 0) > 0 ||
+    (f.seniority?.length ?? 0) > 0 ||
+    Boolean(f.recentlyChangedJobs) ||
+    Boolean(f.recentlyPostedOnLinkedIn);
+  if (!canBroaden) return passes;
+  const base: LeadFilters = { ...f, recentlyChangedJobs: undefined, recentlyPostedOnLinkedIn: undefined };
+  passes.push({ ...base, companySize: undefined });
+  passes.push({ ...base, companySize: undefined, functions: undefined });
+  passes.push({ ...base, companySize: undefined, functions: undefined, seniority: undefined });
+  return passes;
+}
+
 export async function scrapeLinkedInLeads(filters: LeadFilters): Promise<ScrapeResult> {
-  const { input, count } = buildActorInput(filters);
+  const { count } = buildActorInput(filters);
   const actor = LINKEDIN_SEARCH_ACTOR;
 
   // TEST MODE — return mock prospects in the exact actor shape (no Apify call).
@@ -284,41 +307,81 @@ export async function scrapeLinkedInLeads(filters: LeadFilters): Promise<ScrapeR
 
   // rough cost per profile incl. amortised search-page cost (Full vs Full+email)
   const perProfile = filters.findEmails ? 0.012 : 0.008;
+  const target = count;
 
-  const res = await runActorSync<Record<string, unknown>>(actor, input, {
-    maxItems: count,
-    timeoutMs: 240_000,
-  });
+  // TOP-UP LOOP — keep scraping (progressively broadening) until we actually hit
+  // the requested count, deduping across passes. This is the guardrail so that
+  // "50 leads" can't quietly return 13 just because the exact ICP was narrow.
+  const passes = scrapePasses(filters);
+  const seen = new Set<string>();
+  const collected: Lead[] = [];
+  let totalFetched = 0;
+  let broadened = false;
+  let firstError: string | undefined;
 
-  if (!res.ok) {
+  for (let i = 0; i < passes.length && collected.length < target; i++) {
+    const remaining = target - collected.length;
+    // Pass 0 asks for the target (+small buffer for filter loss). Broadened passes
+    // re-include the narrow matches we already have, so ask wide enough to clear
+    // the overlap AND find `remaining` new ones.
+    const ask = i === 0 ? Math.min(MAX_LEADS, remaining + 5) : Math.min(MAX_LEADS, collected.length + remaining + 15);
+    const { input: passInput } = buildActorInput({ ...passes[i], count: ask });
+
+    const res = await runActorSync<Record<string, unknown>>(actor, passInput, { maxItems: ask, timeoutMs: 240_000 });
+    if (!res.ok) {
+      if (i === 0) firstError = res.error; // a *broadening* failure just stops widening
+      continue;
+    }
+    totalFetched += res.items.length;
+
+    let added = 0;
+    for (const item of res.items) {
+      const lead = normalizeLead(item);
+      if (!(lead.name || lead.linkedinUrl)) continue;
+      const key = (lead.linkedinUrl || lead.id || lead.name).toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      collected.push(lead);
+      added++;
+      if (collected.length >= target) break;
+    }
+    if (i > 0 && added > 0) broadened = true;
+    if (i > 0 && added === 0) break; // wider search found nothing new — stop spending
+  }
+
+  if (firstError && collected.length === 0) {
     return {
       configured: true,
       ok: false,
       leads: [],
-      requested: count,
+      requested: target,
       returned: 0,
       withEmail: 0,
       actor,
       costEstimateUsd: 0,
-      note: `The LinkedIn scrape did not complete: ${res.error}`,
-      error: res.error,
+      note: `The LinkedIn scrape did not complete: ${firstError}`,
+      error: firstError,
     };
   }
 
-  const leads = res.items.map(normalizeLead).filter((l) => l.name || l.linkedinUrl);
+  const leads = collected.slice(0, target);
   const withEmail = leads.filter((l) => l.email).length;
+  const short = leads.length < target;
+  const note = short
+    ? `Returned ${leads.length} of the ${target} requested. LinkedIn had no more profiles matching this ICP${broadened ? ", even after broadening the search" : ""}. Widen the filters (seniority, function, geo) or lower the count.`
+    : `Scraped ${leads.length} real LinkedIn prospect${leads.length === 1 ? "" : "s"} via ${actor}${broadened ? " (broadened the search to reach the requested count)" : ""}${
+        filters.findEmails ? ` (${withEmail} with an email found)` : ""
+      }.`;
 
   return {
     configured: true,
     ok: true,
     leads,
-    requested: count,
+    requested: target,
     returned: leads.length,
     withEmail,
     actor,
-    costEstimateUsd: Math.round(leads.length * perProfile * 100) / 100,
-    note: `Scraped ${leads.length} real LinkedIn prospect${leads.length === 1 ? "" : "s"} via ${actor}${
-      filters.findEmails ? ` (${withEmail} with an email found)` : ""
-    }.`,
+    costEstimateUsd: Math.round(totalFetched * perProfile * 100) / 100,
+    note,
   };
 }

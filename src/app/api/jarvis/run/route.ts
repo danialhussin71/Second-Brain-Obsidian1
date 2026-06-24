@@ -23,7 +23,7 @@ import {
 } from "@/lib/jarvis-events";
 import { CORE_BLOCK_GRAMMAR } from "@/lib/block-grammar";
 import { carouselSlidePrompt, generateImage, generateImageWithRefs, imageModelConfigured } from "@/lib/openai-image";
-import { getBrandKit, loadBrandFace, slideRole, brandCarouselSlidePrompt } from "@/lib/brand-kit";
+import { getBrandKit, loadBrandFace, loadBrandTemplate, slideRole, brandCarouselSlidePrompt } from "@/lib/brand-kit";
 import { scrapeLinkedInLeads, MAX_LEADS } from "@/lib/lead-scraper";
 import { enrichLeads, type EnrichedLead } from "@/lib/lead-enrichment";
 import { leadsTestMode } from "@/lib/lead-fixtures";
@@ -380,6 +380,9 @@ async function runCarousel(
     const client = await defaultClient();
     const brand = await getBrandKit(client);
     const face = brand ? await loadBrandFace(brand) : null;
+    // Locked style reference (the founder's canonical carousel) — attached to every
+    // slide gen so the header + slide number reproduce exactly.
+    const template = brand ? await loadBrandTemplate(client) : null;
     const onBrand = Boolean(brand && face);
     const quality = (process.env.OPENAI_IMAGE_QUALITY as "low" | "medium" | "high" | "auto") || "high";
 
@@ -415,13 +418,14 @@ async function runCarousel(
               visual: m.visual,
               logos: m.logos,
               topic: data.topic,
+              styleRef: Boolean(template),
             }),
-            [face!],
-            { quality, size: "1024x1536" }
+            [face!, ...(template ? [template] : [])],
+            { quality, size: "1088x1360" }
           )
         : generateImage(
             carouselSlidePrompt({ index: i + 1, total, title: s.title, body: s.body, art: m.visual, styleBible, topic: data.topic }),
-            { quality, size: "1024x1536" }
+            { quality, size: "1088x1360" }
           );
     });
     if (images.some(Boolean)) {
