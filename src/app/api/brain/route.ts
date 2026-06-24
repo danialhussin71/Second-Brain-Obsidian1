@@ -1,11 +1,22 @@
 import { NextResponse } from "next/server";
 import { getCachedVault, readGraphFromBlob } from "@/lib/vault";
+import { getClientBrain } from "@/lib/client-brain";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    // Fast path: read the pre-built graph JSON from Blob (milliseconds).
+    // Primary path (productized): build the brain locally from the student's
+    // ingested business docs — no Vercel Blob, no external storage. Set
+    // BRAIN_SOURCE=blob to fall back to the legacy vault snapshot.
+    if (process.env.BRAIN_SOURCE !== "blob") {
+      const brain = await getClientBrain();
+      if (brain && brain.graph.nodes.length) {
+        return NextResponse.json(brain);
+      }
+    }
+
+    // Legacy fast path: read the pre-built graph JSON from Blob (milliseconds).
     // Uploaded by `node scripts/sync-to-blob.mjs`.
     const fast = await readGraphFromBlob();
     if (fast) {

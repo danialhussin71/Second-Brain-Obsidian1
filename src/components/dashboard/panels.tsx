@@ -1,0 +1,281 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import {
+  Megaphone,
+  Target,
+  Cpu,
+  Gear,
+  type Icon as PhIcon,
+  ArrowRight,
+  Circle,
+  PaperPlaneTilt,
+  Sparkle,
+  Cube,
+  ListChecks,
+  Trophy,
+  MagnifyingGlass,
+} from "@phosphor-icons/react";
+import {
+  ACTIVITY_LOOP,
+  CAMPAIGNS,
+  DEPARTMENTS,
+  KPIS,
+  MINI_STATS,
+  type ActivityKind,
+} from "@/lib/dashboard-data";
+import { Counter, Meter, Panel, Sparkline, StatusDot, TrendChip } from "./ui";
+
+const DEPT_ICON: Record<string, PhIcon> = { Megaphone, Target, Cpu, Gear };
+const ACT_ICON: Record<ActivityKind, PhIcon> = {
+  route: ArrowRight,
+  scrape: MagnifyingGlass,
+  content: Sparkle,
+  build: Cube,
+  ops: ListChecks,
+  win: Trophy,
+};
+
+/* ─────────────────── hero KPI band ─────────────────── */
+
+export function StatBand() {
+  return (
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      {KPIS.map((k) => (
+        <Panel key={k.key} glow={k.color} className="min-h-[148px]">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/45">{k.label}</span>
+            <TrendChip delta={k.delta} />
+          </div>
+          <div className="mt-2 text-[30px] font-bold leading-none tracking-tight text-white">
+            <Counter value={k.value} format={k.format} />
+          </div>
+          <div className="mt-1 text-[11px] text-white/40">{k.caption}</div>
+          <div className="mt-auto pt-3">
+            <Sparkline data={k.spark} color={k.color} />
+          </div>
+        </Panel>
+      ))}
+    </div>
+  );
+}
+
+/* ─────────────────── secondary mini-stat strip ─────────────────── */
+
+export function MiniStatStrip() {
+  return (
+    <div className="grid grid-cols-3 gap-3 md:grid-cols-6">
+      {MINI_STATS.map((s) => (
+        <div
+          key={s.label}
+          className="rounded-xl border border-white/[0.07] bg-white/[0.025] px-3.5 py-3 backdrop-blur-xl"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[18px] font-bold leading-none text-white" style={{ textShadow: `0 0 18px ${s.color}40` }}>
+              {s.value}
+            </span>
+          </div>
+          <div className="mt-1.5 flex items-center justify-between gap-1">
+            <span className="truncate text-[10.5px] text-white/45">{s.label}</span>
+            <TrendChip delta={s.delta} invert={s.label === "Cost / lead"} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─────────────────── department (C-suite) grid ─────────────────── */
+
+const STATUS_META: Record<string, { label: string; color: string }> = {
+  running: { label: "Running", color: "#34d399" },
+  queued: { label: "Queued", color: "#fbbf24" },
+  idle: { label: "Standby", color: "#94a3b8" },
+};
+
+export function DepartmentGrid() {
+  return (
+    <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      {DEPARTMENTS.map((d) => {
+        const Icon = DEPT_ICON[d.icon] ?? Circle;
+        const st = STATUS_META[d.status];
+        return (
+          <Panel key={d.id} glow={d.color}>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2.5">
+                <span
+                  className="flex h-10 w-10 items-center justify-center rounded-xl border"
+                  style={{ background: `${d.color}1a`, borderColor: `${d.color}40`, color: d.color }}
+                >
+                  <Icon size={20} weight="duotone" />
+                </span>
+                <div>
+                  <div className="text-[15px] font-bold leading-tight text-white">{d.title}</div>
+                  <div className="text-[11px] text-white/45">{d.role}</div>
+                </div>
+              </div>
+              <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider" style={{ color: st.color }}>
+                <StatusDot color={st.color} pulse={d.status === "running"} />
+                {st.label}
+              </span>
+            </div>
+
+            <div className="mt-4 flex items-end justify-between">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-white/35">{d.metricLabel}</div>
+                <div className="text-[18px] font-bold text-white">{d.metricValue}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] uppercase tracking-wider text-white/35">Tasks</div>
+                <div className="text-[18px] font-bold tabular-nums text-white">{d.tasksDone}</div>
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <div className="mb-1 flex items-center justify-between text-[10px] text-white/40">
+                <span>Workload</span>
+                <span className="tabular-nums">{d.load}%</span>
+              </div>
+              <Meter value={d.load} color={d.color} />
+            </div>
+
+            <p className="mt-3 line-clamp-2 text-[11px] leading-relaxed text-white/45">{d.detail}</p>
+          </Panel>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─────────────────── active campaigns table ─────────────────── */
+
+const CAMP_STATUS: Record<string, string> = { live: "#34d399", scaling: "#22d3ee", paused: "#fb7185" };
+
+export function CampaignsTable() {
+  return (
+    <Panel title="Active campaigns" subtitle="Across every channel" accent="#22d3ee" glow="#22d3ee" className="h-full">
+      <div className="-mx-1 overflow-hidden">
+        {/* header */}
+        <div className="grid grid-cols-[1.6fr_0.8fr_0.8fr_0.7fr] gap-2 px-1 pb-2 text-[10px] uppercase tracking-wider text-white/35">
+          <span>Campaign</span>
+          <span className="text-right">Reply</span>
+          <span className="text-right">Booked</span>
+          <span className="text-right">Progress</span>
+        </div>
+        <div className="flex flex-col">
+          {CAMPAIGNS.map((c, i) => (
+            <motion.div
+              key={c.name}
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.05 * i, duration: 0.4 }}
+              className="grid grid-cols-[1.6fr_0.8fr_0.8fr_0.7fr] items-center gap-2 border-t border-white/[0.05] px-1 py-2.5"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <StatusDot color={CAMP_STATUS[c.status]} pulse={c.status !== "paused"} />
+                  <span className="truncate text-[12.5px] font-medium text-white/85">{c.name}</span>
+                </div>
+                <span className="ml-3.5 text-[10.5px] text-white/40">
+                  {c.channel} · {c.status}
+                </span>
+              </div>
+              <span className="text-right text-[12px] font-semibold tabular-nums text-white/80">
+                {c.replyRate > 0 ? `${c.replyRate}%` : "—"}
+              </span>
+              <span className="text-right text-[12px] font-semibold tabular-nums text-white/80">{c.booked}</span>
+              <div className="flex items-center justify-end gap-2">
+                <div className="w-14">
+                  <Meter value={c.progress} color={c.color} height={5} />
+                </div>
+                <span className="w-7 text-right text-[10.5px] tabular-nums text-white/45">{c.progress}%</span>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+/* ─────────────────── live agent activity feed ─────────────────── */
+
+type FeedItem = { id: number; act: (typeof ACTIVITY_LOOP)[number]; time: string };
+
+export function LiveFeed() {
+  const [items, setItems] = useState<FeedItem[]>([]);
+
+  useEffect(() => {
+    let idx = 0;
+    let id = 0;
+    const fmt = () =>
+      new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+
+    // seed a few so the panel isn't empty on first paint
+    const seed: FeedItem[] = [];
+    for (let s = 0; s < 4; s++) {
+      seed.push({ id: id++, act: ACTIVITY_LOOP[(idx + s) % ACTIVITY_LOOP.length], time: fmt() });
+    }
+    idx = 4;
+    setItems(seed.reverse());
+
+    const t = setInterval(() => {
+      const act = ACTIVITY_LOOP[idx % ACTIVITY_LOOP.length];
+      idx++;
+      setItems((cur) => [{ id: id++, act, time: fmt() }, ...cur].slice(0, 7));
+    }, 2600);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <Panel
+      title="Live agent activity"
+      subtitle="KRONOS · autonomous"
+      accent="#a78bfa"
+      glow="#a78bfa"
+      className="h-full"
+      right={
+        <span className="flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+          <StatusDot color="#34d399" pulse />
+          LIVE
+        </span>
+      }
+    >
+      <div className="relative flex-1 overflow-hidden">
+        <AnimatePresence initial={false}>
+          {items.map((it) => {
+            const Icon = ACT_ICON[it.act.kind] ?? PaperPlaneTilt;
+            return (
+              <motion.div
+                key={it.id}
+                layout
+                initial={{ opacity: 0, y: -10, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                className="flex items-start gap-2.5 border-b border-white/[0.04] py-2.5 last:border-0"
+              >
+                <span
+                  className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border"
+                  style={{ background: `${it.act.color}1a`, borderColor: `${it.act.color}40`, color: it.act.color }}
+                >
+                  <Icon size={14} weight="bold" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold" style={{ color: it.act.color }}>
+                      {it.act.agent}
+                    </span>
+                    <span className="shrink-0 font-mono text-[10px] tabular-nums text-white/30">{it.time}</span>
+                  </div>
+                  <p className="mt-0.5 text-[12px] leading-snug text-white/70">{it.act.text}</p>
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+    </Panel>
+  );
+}

@@ -6,6 +6,7 @@
  */
 
 import { tool, generateText } from "ai";
+import { stripEmDashes } from "./sanitize";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { anthropicFetch } from "./anthropic-fetch";
@@ -75,7 +76,7 @@ Output ONLY the post text, ready to paste.`;
           });
           return {
             ok: true,
-            post: text.trim(),
+            post: stripEmDashes(text.trim()),
             analysed: LINKEDIN_POSTS.length,
             topPerformers: ranked.slice(0, 3).map((p) => ({
               reactions: p.reactions.reduce((s, r) => s + r.count, 0),

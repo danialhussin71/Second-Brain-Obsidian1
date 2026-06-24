@@ -2,6 +2,7 @@ import { streamText, tool, type CoreMessage } from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { anthropicFetch } from "@/lib/anthropic-fetch";
+import { NO_EMDASH_RULE, emDashTransform } from "@/lib/sanitize";
 import { z } from "zod";
 import {
   getCachedVault,
@@ -98,7 +99,7 @@ export async function POST(req: Request) {
   // Force a reasoning loop: query brain → read full notes → synthesize in voice.
   const reasoningRules = `
 
-ABSOLUTE WRITING RULE (NO EM DASHES): never output an em dash (—) or en dash (–) anywhere, under any circumstance. Not as a pause, an aside, a parenthetical, or a range. Use a comma, a period, a colon, or the word "to" for ranges instead. This overrides any stylistic habit and applies to every sentence, label, list item, and block.
+${NO_EMDASH_RULE}
 
 REASONING LOOP — follow this sequence:
 1. If the question touches Daniel's business, voice, ICP, content, decisions, clients, or past work, call \`queryBrain\` first with a precise keyword query.
@@ -155,16 +156,7 @@ REASONING LOOP — follow this sequence:
   // Hard guarantee (belt-and-suspenders with the prompt rule above): rewrite em/en dashes out of the
   // streamed text so one can NEVER reach the UI, whatever the model emits. Touches only text deltas;
   // tool calls and every other stream part pass through untouched.
-  const stripDashes = () =>
-    new TransformStream<any, any>({
-      transform(part, controller) {
-        if (part?.type === "text-delta" && typeof part.textDelta === "string") {
-          controller.enqueue({ ...part, textDelta: part.textDelta.replace(/\s*[—–]\s*/g, ", ") });
-        } else {
-          controller.enqueue(part);
-        }
-      },
-    });
+  const stripDashes = emDashTransform();
 
   const result = streamText({
     model: pickModel(),

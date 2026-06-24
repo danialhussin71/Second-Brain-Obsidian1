@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { generateText } from "ai";
+import { stripEmDashes } from "@/lib/sanitize";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { openai } from "@ai-sdk/openai";
 import { anthropicFetch } from "@/lib/anthropic-fetch";
@@ -145,7 +146,7 @@ Return only the finished draft, ready to paste.`;
       system,
       messages: [{ role: "user", content: userPrompt }],
     });
-    draft = result.text.trim();
+    draft = stripEmDashes(result.text.trim());
   } catch (err: any) {
     return NextResponse.json({ ok: false, error: err?.message || String(err) }, { status: 500 });
   }

@@ -477,16 +477,32 @@ export default function Home() {
               <div className="font-mono text-xs text-muted-foreground">{error}</div>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={() => {
-                playSfx("/audio/start.mp3"); // start chime — user gesture, always allowed
-                usePresentation.getState().setMode("stage");
-              }}
-              className="group relative rounded-2xl border border-cyan-300/30 bg-gradient-to-b from-white/[0.08] to-white/[0.015] px-20 py-7 text-3xl font-light tracking-tight shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_0_70px_-14px_rgba(34,211,238,0.65)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-cyan-300/60 hover:from-white/[0.13] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_0_110px_-12px_rgba(34,211,238,0.9)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
-            >
-              <span className="bg-gradient-to-br from-white via-cyan-50 to-cyan-200/80 bg-clip-text text-transparent">Start</span>
-            </button>
+            <div className="flex flex-col items-center gap-6">
+              <button
+                type="button"
+                onClick={() => {
+                  playSfx("/audio/start.mp3"); // start chime — user gesture, always allowed
+                  usePresentation.getState().setMode("stage");
+                }}
+                className="group relative rounded-2xl border border-cyan-300/30 bg-gradient-to-b from-white/[0.08] to-white/[0.015] px-20 py-7 text-3xl font-light tracking-tight shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_0_70px_-14px_rgba(34,211,238,0.65)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-cyan-300/60 hover:from-white/[0.13] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_0_110px_-12px_rgba(34,211,238,0.9)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+              >
+                <span className="bg-gradient-to-br from-white via-cyan-50 to-cyan-200/80 bg-clip-text text-transparent">Start</span>
+              </button>
+              <div className="flex flex-col items-center gap-2.5">
+                <a
+                  href="/jarvis"
+                  className="rounded-full border border-cyan-300/40 bg-cyan-300/[0.06] px-5 py-2 text-sm font-medium tracking-wide text-cyan-100 shadow-[0_0_40px_-12px_rgba(34,211,238,0.7)] transition hover:border-cyan-300/70 hover:bg-cyan-300/[0.12] hover:text-white"
+                >
+                  ⌁ enter mission control →
+                </a>
+                <a
+                  href="/studio"
+                  className="text-sm text-white/45 underline-offset-4 transition hover:text-cyan-200 hover:underline"
+                >
+                  or open the chat studio →
+                </a>
+              </div>
+            </div>
           )}
         </div>
       )}

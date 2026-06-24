@@ -1,4 +1,5 @@
 import { generateText } from "ai";
+import { NO_EMDASH_RULE, stripEmDashes } from "@/lib/sanitize";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { anthropicFetch } from "@/lib/anthropic-fetch";
@@ -19,7 +20,7 @@ type Picked = {
   providerOptions: NonNullable<Parameters<typeof generateText>[0]["providerOptions"]>;
 };
 function pickModel(): Picked {
-  const id = process.env.AI_MODEL || "anthropic/claude-sonnet-4-6";
+  const id = process.env.AI_MODEL || "anthropic/claude-opus-4-8";
   const [provider, ...rest] = id.split("/");
   const model = rest.join("/");
   if (provider === "openai") {
@@ -29,10 +30,12 @@ function pickModel(): Picked {
   }
   // Read the key at REQUEST time (not import time) so env injection is in effect.
   const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY, fetch: anthropicFetch });
+  // NOTE: Opus 4.7/4.8 REMOVED `thinking: {type:"enabled", budget_tokens}` — sending it 400s.
+  // Opus 4.8 reasons well without an explicit thinking budget; omit thinking config here. (Switch to
+  // `{ thinking: { type: "adaptive" } }` once on an @ai-sdk/anthropic build that supports adaptive.)
   return {
-    model: anthropic(model || "claude-sonnet-4-6"),
-    // Claude extended thinking — the equivalent "think before answering" pass for a sharper analysis.
-    providerOptions: { anthropic: { thinking: { type: "enabled", budgetTokens: 4000 } } },
+    model: anthropic(model || "claude-opus-4-8"),
+    providerOptions: { anthropic: {} },
   };
 }
 
@@ -99,7 +102,7 @@ You have rich UI BLOCK tokens — use them so the report renders as live element
 - [[keypoints]] / [[actions]] with \`- \` bullets — what's working / what to do.
 If Daniel asked for a content plan or what to post next, deliver the plan as a SERIES of [[idea]] previews (one per post), NOT a numbered list. Use callouts/stats for the analysis highlights. Keep the connecting narrative as short prose, with the four charts woven in.
 
-Write a DETAILED, thorough response that reads like a senior strategist's full work-up — go deep, not a quick summary. Open with a single \`## \` headline, then build the analysis section by section with real evidence from the numbers, embedding each chart where it backs your point and using callouts/stats to make findings pop. Even if Daniel asked for a content plan, FIRST ground it in a proper read of the data (referencing all four charts), THEN deliver the plan AS [[idea]] PREVIEWS. Be concrete and specific — cite actual posts and figures. Avoid em-dashes (—); use commas or periods. Do NOT mention the tokens or that you are inserting charts/blocks.`;
+Write a DETAILED, thorough response that reads like a senior strategist's full work-up, go deep, not a quick summary. Open with a single \`## \` headline, then build the analysis section by section with real evidence from the numbers, embedding each chart where it backs your point and using callouts/stats to make findings pop. Even if Daniel asked for a content plan, FIRST ground it in a proper read of the data (referencing all four charts), THEN deliver the plan AS [[idea]] PREVIEWS. Be concrete and specific, cite actual posts and figures. Do NOT mention the tokens or that you are inserting charts/blocks.\n\n${NO_EMDASH_RULE}`;
 
   try {
     const { model, providerOptions } = pickModel();
@@ -115,7 +118,7 @@ Write a DETAILED, thorough response that reads like a senior strategist's full w
       monthly: stats.monthly,
       topPosts: stats.topPosts,
       reactionMix: stats.reactionMix,
-      document: text,
+      document: stripEmDashes(text),
     });
   } catch (err) {
     return Response.json(
