@@ -83,8 +83,12 @@ export async function getContentGuide(opts: { format: string; task: string }): P
     const qVec = await embedOne(opts.task.slice(0, 4000));
     const { data, error } = await db.rpc("match_content_guides", {
       query_embedding: qVec,
-      filter_category: null,
-      match_count: 10,
+      // Filter server-side when the format maps to ONE category (profile / text /
+      // strategy / description) so a weak one-word task can't crowd the right
+      // guide out of the top-k. A high match_count covers every guide for the
+      // multi-category formats (carousel → carousel + cheatsheet).
+      filter_category: allowed.length === 1 ? allowed[0] : null,
+      match_count: 30,
       similarity_threshold: 0.0,
     });
     if (error || !data?.length) return null;
