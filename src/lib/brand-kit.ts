@@ -266,7 +266,7 @@ export function brandCarouselSlidePrompt(args: {
     repeatable,
     "",
     styleRef
-      ? `STYLE REFERENCE IMAGE (attached): a reference image of the founder's canonical carousel is provided. Match the HEADER (avatar + name + tagline + REPOST badge) and the bottom-right SLIDE NUMBER to that reference EXACTLY: identical layout, fonts, weights, colours, sizes and positions, and the same black background with the crimson glow. Use the reference ONLY for the brand template, header and number. Generate fresh, NEW content for this slide (do NOT copy its headline, body text, logos or imagery).`
+      ? `STYLE REFERENCE IMAGE (attached): use it to lock ONLY three things to the founder's canonical carousel — (1) the HEADER (crimson-ringed avatar, name, two-line grey tagline, and the REPOST badge top-right), (2) the FOOTER slide NUMBER (bottom-right), and (3) the exact FONTS (the heavy condensed all-caps headline face and the rounded geometric sans body). Reproduce those three precisely. Do NOT copy anything else from the reference — not its headline, body text, background, imagery, logos or layout. Everything else follows the per-slide instructions below.`
       : "",
     layoutLine,
     `Carousel topic: ${topic}.`,

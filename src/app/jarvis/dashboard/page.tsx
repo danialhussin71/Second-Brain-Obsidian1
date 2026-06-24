@@ -15,9 +15,37 @@ import {
   CampaignsTable,
   DepartmentGrid,
   LiveFeed,
+  MeetingsPanel,
   MiniStatStrip,
   StatBand,
 } from "@/components/dashboard/panels";
+import { BRAND, type ActivityKind } from "@/lib/dashboard-data";
+
+/* ─── live data from the founder's connected apps (Zapier MCP) ─── */
+
+type DashMeeting = { title: string; when: string; durationMins?: number | null; attendees?: number | null; platform?: string | null };
+type LiveResp = {
+  live: boolean;
+  data?: {
+    kpis: { key: string; label: string; value: number; format: "currency" | "compact" | "number" | "percent"; delta: number; caption: string }[];
+    miniStats: { label: string; value: string; delta: number }[];
+    meetings: { upcoming: DashMeeting[]; last: DashMeeting | null };
+    activity: { source: string; text: string }[];
+  };
+};
+
+const KPI_COLORS = [BRAND.emerald, BRAND.cyan, BRAND.amber, BRAND.violet];
+const MINI_COLORS = [BRAND.cyan, BRAND.amber, BRAND.emerald, BRAND.violet, BRAND.fuchsia, BRAND.sky];
+const SRC: Record<string, { color: string; kind: ActivityKind }> = {
+  Calendar: { color: BRAND.cyan, kind: "route" },
+  Gmail: { color: BRAND.amber, kind: "ops" },
+  Slack: { color: BRAND.violet, kind: "content" },
+  Notion: { color: BRAND.sky, kind: "build" },
+  Zoom: { color: BRAND.emerald, kind: "win" },
+  LinkedIn: { color: BRAND.fuchsia, kind: "content" },
+  Drive: { color: BRAND.gold, kind: "build" },
+  Other: { color: BRAND.cyan, kind: "route" },
+};
 
 /**
  * `/jarvis/dashboard` — the showcase cockpit. A full-bleed, scrollable
@@ -27,6 +55,30 @@ import {
  */
 
 export default function DashboardPage() {
+  const [resp, setResp] = useState<LiveResp | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/dashboard/data")
+      .then((r) => r.json())
+      .then((j: LiveResp) => {
+        if (!cancelled) setResp(j);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const d = resp?.live ? resp.data : undefined;
+  const isLive = Boolean(resp?.live);
+  const kpis = d?.kpis?.length ? d.kpis.map((k, i) => ({ ...k, color: KPI_COLORS[i % KPI_COLORS.length] })) : undefined;
+  const miniStats = d?.miniStats?.length ? d.miniStats.map((s, i) => ({ ...s, color: MINI_COLORS[i % MINI_COLORS.length] })) : undefined;
+  const activity = d?.activity?.length
+    ? d.activity.map((a) => ({ ...(SRC[a.source] ?? SRC.Other), agent: a.source, text: a.text }))
+    : undefined;
+  const meetings = d?.meetings;
+
   return (
     <div className="relative min-h-screen w-full bg-[#02040a] text-white">
       {/* deep field + faint grid (matches the HUD) */}
@@ -48,17 +100,17 @@ export default function DashboardPage() {
       <div className="blob-a pointer-events-none fixed -left-32 top-24 h-[420px] w-[420px] rounded-full bg-cyan-500/[0.07] blur-[120px]" />
       <div className="blob-b pointer-events-none fixed -right-28 top-1/3 h-[460px] w-[460px] rounded-full bg-violet-500/[0.07] blur-[130px]" />
 
-      <TopBar />
+      <TopBar isLive={isLive} />
 
       <main className="relative z-10 mx-auto w-full max-w-[1400px] px-5 pb-16 pt-6 md:px-8">
         {/* hero KPIs */}
         <Rise>
-          <StatBand />
+          <StatBand kpis={kpis} />
         </Rise>
 
         {/* secondary stat strip */}
         <Rise delay={0.05} className="mt-4">
-          <MiniStatStrip />
+          <MiniStatStrip stats={miniStats} />
         </Rise>
 
         {/* revenue + channel mix */}
@@ -130,20 +182,26 @@ export default function DashboardPage() {
             <CampaignsTable />
           </Rise>
           <Rise delay={0.34}>
-            <LiveFeed />
+            <LiveFeed activity={activity} />
           </Rise>
         </div>
 
+        {/* meetings (live · calendar + zoom) + conversion funnel */}
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Rise delay={0.38} className="lg:col-span-2">
+          <Rise delay={0.38}>
+            <MeetingsPanel meetings={meetings} />
+          </Rise>
+          <Rise delay={0.42} className="lg:col-span-2">
             <Panel title="Conversion funnel" subtitle="Sourced → won · this quarter" accent="#22d3ee" glow="#38bdf8">
               <FunnelPanel />
             </Panel>
           </Rise>
-          <Rise delay={0.42}>
-            <SystemPanel />
-          </Rise>
         </div>
+
+        {/* system status */}
+        <Rise delay={0.46} className="mt-4">
+          <SystemPanel />
+        </Rise>
 
         <p className="mt-8 text-center text-[11px] text-white/25">
           Second Brain · autonomous GTM operating system · demonstration data
@@ -155,7 +213,7 @@ export default function DashboardPage() {
 
 /* ─────────────────── top bar ─────────────────── */
 
-function TopBar() {
+function TopBar({ isLive }: { isLive: boolean }) {
   const [clock, setClock] = useState("");
   useEffect(() => {
     const tick = () =>
@@ -191,9 +249,13 @@ function TopBar() {
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="hidden items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/[0.08] px-2.5 py-1 text-[10.5px] font-medium text-emerald-300 sm:flex">
+          <span
+            className={`hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10.5px] font-medium sm:flex ${
+              isLive ? "border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-300" : "border-amber-400/25 bg-amber-400/[0.08] text-amber-300"
+            }`}
+          >
             <Pulse size={12} weight="bold" />
-            All systems operational
+            {isLive ? "Live · connected apps" : "Demo data"}
           </span>
           <span className="hidden font-mono text-[12px] tabular-nums tracking-widest text-cyan-200/75 md:block">{clock}</span>
           <button className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11.5px] text-white/65 transition hover:border-cyan-300/40 hover:text-white">
