@@ -334,26 +334,55 @@ export async function scrapeLinkedInProfile(query: string): Promise<LinkedInProf
 
 /* ------------------------------ scrape ------------------------------ */
 
+/** There's something for LinkedIn to match on (a role/title, query, or geo). */
+function hasSearchSignal(f: LeadFilters): boolean {
+  return Boolean(f.searchQuery?.trim() || f.jobTitles?.length || f.locations?.length || f.functions?.length);
+}
+
+/** Stable signature so we never run the same effective search twice. */
+function passSig(f: LeadFilters): string {
+  return JSON.stringify([
+    f.searchQuery?.trim() || "",
+    f.jobTitles ?? [],
+    f.locations ?? [],
+    f.seniority ?? [],
+    f.functions ?? [],
+    f.companySize ?? [],
+    !!f.recentlyChangedJobs,
+    !!f.recentlyPostedOnLinkedIn,
+  ]);
+}
+
 /**
- * Progressive search-broadening plan. Pass 0 is the exact ICP; each later pass
- * relaxes the most peripheral filter (company size + signals, then function,
- * then seniority) while ALWAYS keeping the core ICP (job titles, search query,
- * locations). We only top up to the requested count from these — we never drop
- * the role itself, so the leads stay on-ICP.
+ * Progressive search-broadening plan. Pass 0 is the EXACT ICP; each later pass
+ * relaxes ONE more constraint — peripheral first (recency signals → company size
+ * → function → seniority), then the CORE (location, then the explicit titles in
+ * favour of a free-text role query). So if a tight ICP returns nothing, we keep
+ * widening the metrics until LinkedIn actually returns prospects, instead of
+ * dead-ending. Every pass keeps at least one search signal, so results stay on
+ * topic, and duplicates are skipped.
  */
 function scrapePasses(f: LeadFilters): LeadFilters[] {
-  const passes: LeadFilters[] = [f];
-  const canBroaden =
-    (f.companySize?.length ?? 0) > 0 ||
-    (f.functions?.length ?? 0) > 0 ||
-    (f.seniority?.length ?? 0) > 0 ||
-    Boolean(f.recentlyChangedJobs) ||
-    Boolean(f.recentlyPostedOnLinkedIn);
-  if (!canBroaden) return passes;
+  const passes: LeadFilters[] = [];
+  const seen = new Set<string>();
+  const add = (p: LeadFilters) => {
+    if (!hasSearchSignal(p)) return;
+    const sig = passSig(p);
+    if (seen.has(sig)) return;
+    seen.add(sig);
+    passes.push(p);
+  };
+
+  add(f); // exact ICP
   const base: LeadFilters = { ...f, recentlyChangedJobs: undefined, recentlyPostedOnLinkedIn: undefined };
-  passes.push({ ...base, companySize: undefined });
-  passes.push({ ...base, companySize: undefined, functions: undefined });
-  passes.push({ ...base, companySize: undefined, functions: undefined, seniority: undefined });
+  add(base); // drop the restrictive recency signals
+  add({ ...base, companySize: undefined });
+  add({ ...base, companySize: undefined, functions: undefined });
+  add({ ...base, companySize: undefined, functions: undefined, seniority: undefined });
+  // relax the CORE so a narrow ICP still pulls SOMETHING:
+  add({ ...base, companySize: undefined, functions: undefined, seniority: undefined, locations: undefined }); // drop geo
+  add({ searchQuery: f.searchQuery, jobTitles: f.jobTitles, count: f.count, findEmails: f.findEmails }); // role only
+  add({ searchQuery: (f.searchQuery?.trim() || f.jobTitles?.join(" ") || "").trim() || undefined, count: f.count, findEmails: f.findEmails }); // broadest: free-text role
   return passes;
 }
 
@@ -433,7 +462,9 @@ export async function scrapeLinkedInLeads(filters: LeadFilters): Promise<ScrapeR
       if (collected.length >= target) break;
     }
     if (i > 0 && added > 0) broadened = true;
-    if (i > 0 && added === 0) break; // wider search found nothing new — stop spending
+    // Stop topping up only once we ALREADY have leads and a wider pass adds nothing
+    // new. While we still have ZERO, keep widening — that's the whole point.
+    if (i > 0 && added === 0 && collected.length > 0) break;
   }
 
   if (firstError && collected.length === 0) {
@@ -453,12 +484,17 @@ export async function scrapeLinkedInLeads(filters: LeadFilters): Promise<ScrapeR
 
   const leads = collected.slice(0, target);
   const withEmail = leads.filter((l) => l.email).length;
-  const short = leads.length < target;
-  const note = short
-    ? `Returned ${leads.length} of the ${target} requested. LinkedIn had no more profiles matching this ICP${broadened ? ", even after broadening the search" : ""}. Widen the filters (seniority, function, geo) or lower the count.`
-    : `Scraped ${leads.length} real LinkedIn prospect${leads.length === 1 ? "" : "s"} via ${actor}${broadened ? " (broadened the search to reach the requested count)" : ""}${
-        filters.findEmails ? ` (${withEmail} with an email found)` : ""
-      }.`;
+  let note: string;
+  if (leads.length === 0) {
+    note =
+      "No LinkedIn profiles came back, even after automatically broadening the search (dropped the recency signals, company size, function, seniority, location, then the exact titles). Try different role keywords or a broader geography.";
+  } else if (leads.length < target) {
+    note = `Returned ${leads.length} of the ${target} requested${broadened ? " (auto-broadened the search to pull these)" : ""}. LinkedIn had no more on-ICP profiles. Widen the filters or lower the count.`;
+  } else {
+    note = `Scraped ${leads.length} real LinkedIn prospect${leads.length === 1 ? "" : "s"} via ${actor}${broadened ? " (auto-broadened the search to reach the requested count)" : ""}${
+      filters.findEmails ? ` (${withEmail} with an email found)` : ""
+    }.`;
+  }
 
   return {
     configured: true,

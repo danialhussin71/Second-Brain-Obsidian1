@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type PanInfo } from "motion/react";
-import { CaretLeft, CaretRight, Copy, Check, Sparkle, ArrowsOut, ArrowsIn, DownloadSimple, FileText, FilePdf, FileZip } from "@phosphor-icons/react";
+import { CaretLeft, CaretRight, Copy, Check, Sparkle, ArrowsOut, ArrowsIn, DownloadSimple, FilePdf, FileZip } from "@phosphor-icons/react";
 import { zipSync } from "fflate";
 import type { CarouselArtifactData } from "@/lib/jarvis-events";
 import { cn } from "@/lib/utils";
+import { DeliverableEyebrow } from "./DeliverableEyebrow";
 
 /**
  * The carousel host — a cinematic, premium slide deck. A floating slide on an
@@ -18,6 +19,9 @@ import { cn } from "@/lib/utils";
 
 const KIND_TAG: Record<string, string> = { hook: "HOOK", body: "BUILD", cta: "CALL TO ACTION" };
 const ACCENT: Record<string, string> = { hook: "#d946ef", body: "#a78bfa", cta: "#34d399" };
+// founder brand crimson — drives the on-white controls + the card's elevation glow
+const BRAND = "#ED1846";
+const BRAND_INK = "#C20E38"; // a touch darker, for small text on white (AA contrast)
 
 const variants = {
   enter: (dir: number) => ({ opacity: 0, x: dir >= 0 ? 80 : -80, scale: 0.88, rotateY: dir >= 0 ? 12 : -12 }),
@@ -50,7 +54,6 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
   const n = slides.length;
   const slide = slides[i];
   const accent = ACCENT[slide?.kind ?? "body"] ?? "#a78bfa";
-  const hasVisuals = slides.some((s) => s.image);
 
   // Render ONE slide via the per-image endpoint, retrying up to 3× on failure.
   const genOne = useCallback(
@@ -112,7 +115,7 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
       return true;
     });
     if (!needs.length) return;
-    const CONC = 3;
+    const CONC = 5;
     let cursor = 0;
     const worker = async () => {
       while (cursor < needs.length) await genOne(needs[cursor++]);
@@ -200,23 +203,15 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
 
   /* ----- the cinematic slide stage ----- */
   const stage = (large: boolean) => (
-    <div className={cn("relative flex min-h-0 flex-1 flex-col items-center gap-3.5", large ? "px-6 py-5" : "px-3 py-3")} style={{ perspective: 1600 }}>
-      {/* ambient bloom — breathes, tinted to the active slide */}
-      <motion.div
-        className="pointer-events-none absolute inset-8 rounded-[40%]"
-        style={{ background: `radial-gradient(60% 55% at 50% 38%, ${accent}4d, transparent 72%)`, filter: "blur(40px)" }}
-        animate={{ opacity: [0.55, 0.8, 0.55] }}
-        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-      />
-
+    <div className={cn("relative flex min-h-0 flex-1 flex-col items-center gap-3.5 bg-white", large ? "px-6 py-5" : "px-3 py-4")} style={{ perspective: 1600 }}>
       <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
         <NavButton side="left" onClick={() => go(-1)} disabled={i === 0} />
 
-        <div className={cn("relative aspect-[4/5] h-full w-auto", large ? "max-h-[80vh]" : "max-h-[438px]")}>
-          {/* floor glow — the slide reads as a floating object */}
+        <div className={cn("relative aspect-[4/5] h-full w-auto", large ? "max-h-[80vh]" : "max-h-[600px]")}>
+          {/* crimson ground glow so the slide floats warmly on the white stage */}
           <div
-            className="pointer-events-none absolute -bottom-4 left-1/2 h-8 w-[82%] -translate-x-1/2 rounded-[50%]"
-            style={{ background: accent, opacity: 0.4, filter: "blur(22px)" }}
+            className="pointer-events-none absolute -bottom-5 left-1/2 h-9 w-[84%] -translate-x-1/2 rounded-[50%]"
+            style={{ background: "rgba(237,24,70,0.26)", filter: "blur(24px)" }}
           />
           <AnimatePresence custom={dir} mode="popLayout" initial={false}>
             <motion.div
@@ -233,8 +228,13 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
               onDragEnd={onDragEnd}
               className="absolute inset-0 cursor-grab overflow-hidden rounded-[22px] active:cursor-grabbing"
               style={{
-                background: slide?.image ? "rgba(6,9,18,0.92)" : `radial-gradient(130% 90% at 18% -8%, ${accent}28, rgba(6,9,18,0.96) 60%)`,
-                boxShadow: `0 50px 130px -30px ${accent}8c, 0 18px 50px -28px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.12)`,
+                // image slides display on white; while a slide renders its tile is a dark crimson-tinted glass
+                background: slide?.image
+                  ? "#ffffff"
+                  : "linear-gradient(157deg, rgba(32,36,55,0.94) 0%, rgba(11,13,24,0.96) 56%, rgba(28,11,19,0.97) 100%)",
+                // layered elevation: crisp contact → soft ambient → deep crimson (brand) halo
+                boxShadow:
+                  "0 1px 2px rgba(15,23,42,0.10), 0 10px 26px -8px rgba(15,23,42,0.20), 0 34px 70px -30px rgba(237,24,70,0.34)",
               }}
             >
               {slide?.image ? (
@@ -248,35 +248,48 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
                   className="pointer-events-none absolute inset-0 h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-4 px-7 text-center">
+                <div className="relative flex h-full flex-col items-center justify-center gap-4 overflow-hidden px-7 text-center">
+                  {/* glass dressing — a crimson bloom + a hairline top sheen */}
+                  <div
+                    className="pointer-events-none absolute left-1/2 top-[16%] h-2/3 w-3/4 -translate-x-1/2 rounded-full"
+                    style={{ background: "radial-gradient(circle, rgba(237,24,70,0.36), transparent 68%)", filter: "blur(36px)" }}
+                  />
+                  <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
                   {genState[i] === "error" ? (
                     <>
-                      <Sparkle size={26} weight="fill" style={{ color: accent }} className="opacity-70" />
-                      <div className="text-[13px] text-white/70">This slide didn&apos;t render.</div>
+                      <Sparkle size={26} weight="fill" style={{ color: BRAND }} className="relative opacity-90" />
+                      <div className="relative text-[13px] text-white/75">This slide didn&apos;t render.</div>
                       <button
                         onClick={() => genOne(i)}
-                        className="rounded-lg border border-white/15 bg-white/[0.07] px-3.5 py-1.5 text-[12px] font-medium text-white/85 transition hover:border-white/30 hover:text-white"
+                        className="relative rounded-lg border border-white/15 bg-white/[0.06] px-3.5 py-1.5 text-[12px] font-medium text-white/85 backdrop-blur transition hover:border-[#ED1846]/60 hover:text-white"
                       >
                         Retry slide
                       </button>
                     </>
                   ) : (
                     <>
-                      <div
-                        className="h-9 w-9 animate-spin rounded-full border-2 border-white/15"
-                        style={{ borderTopColor: accent }}
-                      />
-                      <div className="text-[12.5px] font-medium text-white/65">
+                      <div className="relative h-10 w-10">
+                        <div className="absolute inset-0 rounded-full border-2 border-white/10" />
+                        <div
+                          className="absolute inset-0 animate-spin rounded-full border-2 border-transparent"
+                          style={{ borderTopColor: BRAND, borderRightColor: "rgba(237,24,70,0.45)", filter: "drop-shadow(0 0 7px rgba(237,24,70,0.65))" }}
+                        />
+                      </div>
+                      <div className="relative text-[12.5px] font-medium text-white/80">
                         Rendering slide {i + 1} of {n}…
                       </div>
-                      <div className="text-[11px] tracking-wide text-white/35">on-brand · gpt-image</div>
+                      <div className="relative text-[11px] tracking-wide text-white/45">on-brand · gpt-image</div>
                     </>
                   )}
                 </div>
               )}
-              {/* glass edge: hairline ring + a whisper of top light */}
-              <div className="pointer-events-none absolute inset-0 rounded-[22px] ring-1 ring-inset ring-white/12" />
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-16 rounded-t-[22px] bg-gradient-to-b from-white/[0.06] to-transparent" />
+              {/* hairline edge — faint dark on the white image, light on the dark glass tile */}
+              <div
+                className={cn(
+                  "pointer-events-none absolute inset-0 rounded-[22px] ring-1 ring-inset",
+                  slide?.image ? "ring-black/[0.06]" : "ring-white/[0.10]"
+                )}
+              />
             </motion.div>
           </AnimatePresence>
         </div>
@@ -284,29 +297,29 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
         <NavButton side="right" onClick={() => go(1)} disabled={i === n - 1} />
       </div>
 
-      {/* controls — OFF the picture: kind pill · segmented progress · counter */}
-      <div className="flex w-full max-w-[420px] shrink-0 items-center gap-3">
+      {/* nav bar — a floating glass rail: kind · page dots · counter */}
+      <div className="flex shrink-0 items-center gap-3 rounded-full border border-black/[0.06] bg-white/90 px-3.5 py-2 backdrop-blur-xl shadow-[0_2px_4px_rgba(15,23,42,0.04),0_14px_32px_-16px_rgba(15,23,42,0.28)]">
         <span
-          className="shrink-0 rounded-md px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-white/90 backdrop-blur"
-          style={{ background: `${accent}22`, border: `1px solid ${accent}44` }}
+          className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em]"
+          style={{ background: "rgba(237,24,70,0.10)", border: "1px solid rgba(237,24,70,0.28)", color: BRAND_INK }}
         >
           {KIND_TAG[slide?.kind ?? "body"]}
         </span>
-        <div className="flex flex-1 items-center gap-1.5">
+        <div className="flex items-center gap-1.5">
           {data.slides.map((_, k) => (
-            <button key={k} onClick={() => jump(k)} className="group h-1.5 flex-1 overflow-hidden rounded-full bg-white/12" aria-label={`Slide ${k + 1}`}>
-              <motion.div
-                className="h-full rounded-full"
-                style={{ background: accent, boxShadow: k === i ? `0 0 10px ${accent}` : "none" }}
+            <button key={k} onClick={() => jump(k)} aria-label={`Slide ${k + 1}`} className="grid h-5 place-items-center">
+              <motion.span
+                className="block h-1.5 rounded-full"
+                style={{ background: k === i ? BRAND : "rgba(237,24,70,0.22)", boxShadow: k === i ? `0 0 9px ${BRAND}99` : "none" }}
                 initial={false}
-                animate={{ width: k <= i ? "100%" : "0%", opacity: k <= i ? 1 : 0 }}
-                transition={{ duration: 0.4, ease: "easeOut" }}
+                animate={{ width: k === i ? 22 : 6 }}
+                transition={{ type: "spring", stiffness: 420, damping: 32 }}
               />
             </button>
           ))}
         </div>
-        <span className="shrink-0 font-mono text-[11px] tabular-nums text-white/45">
-          {pad(i + 1)} <span className="text-white/25">/ {pad(n)}</span>
+        <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums" style={{ color: BRAND_INK }}>
+          {pad(i + 1)} <span style={{ color: "rgba(194,14,56,0.42)" }}>/ {pad(n)}</span>
         </span>
       </div>
     </div>
@@ -346,9 +359,9 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
 
   /* ----- caption dock ----- */
   const caption = (
-    <div className="shrink-0 border-t border-white/8 px-4 py-3">
-      <div className="mb-1.5 flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
+    <div className="shrink-0 border-t border-white/8 px-4 py-2">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-[0.16em] text-white/40">
           <span className="h-1 w-1 rounded-full" style={{ background: accent }} />
           Post caption
         </span>
@@ -367,7 +380,7 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
           </motion.button>
         </div>
       </div>
-      <p data-lenis-prevent className="max-h-[64px] overflow-y-auto whitespace-pre-line text-[12.5px] leading-relaxed text-white/60">
+      <p data-lenis-prevent className="max-h-[48px] overflow-y-auto whitespace-pre-line text-[12px] leading-relaxed text-white/60">
         {data.caption}
       </p>
     </div>
@@ -376,18 +389,12 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
   return (
     <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 220, damping: 26 }} className="flex h-full flex-col">
       {/* header */}
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/8 px-4 py-2">
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-fuchsia-300/80">
-            <Sparkle size={11} weight="fill" />
-            Deliverable · Carousel
-          </div>
-          <div className="mt-0.5 truncate text-[15.5px] font-semibold tracking-tight text-white">{data.topic}</div>
+          <DeliverableEyebrow />
+          <div className="mt-0.5 truncate text-[13px] font-semibold tracking-tight text-white">{data.topic}</div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <span className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1 font-mono text-[10px] text-white/55 backdrop-blur">
-            {n} slides{hasVisuals ? " · visual" : ""}
-          </span>
           <GlassBtn label="Full screen" onClick={() => setFull(true)}>
             <ArrowsOut size={15} weight="bold" />
           </GlassBtn>
@@ -395,15 +402,7 @@ export default function CarouselArtifact({ data }: { data: CarouselArtifactData 
         </div>
       </div>
 
-      {data.grounding.length > 0 && (
-        <div className="flex shrink-0 items-center gap-1.5 border-b border-white/8 px-4 py-1.5 text-[9.5px] text-white/35">
-          <FileText size={10} className="text-white/30" />
-          Grounded in {Array.from(new Set(data.grounding)).slice(0, 3).join(", ")}
-        </div>
-      )}
-
       {stage(false)}
-      {filmstrip}
       {caption}
 
       {/* fullscreen */}
@@ -497,17 +496,17 @@ function NavButton({ side, onClick, disabled }: { side: "left" | "right"; onClic
   const Icon = side === "left" ? CaretLeft : CaretRight;
   return (
     <motion.button
-      whileHover={disabled ? undefined : { scale: 1.08 }}
-      whileTap={disabled ? undefined : { scale: 0.92 }}
+      whileHover={disabled ? undefined : { scale: 1.07 }}
+      whileTap={disabled ? undefined : { scale: 0.9 }}
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "absolute z-10 grid h-11 w-11 place-items-center rounded-full border border-white/12 bg-black/40 text-white/65 backdrop-blur-xl transition hover:border-white/35 hover:bg-black/60 hover:text-white disabled:pointer-events-none disabled:opacity-15",
-        side === "left" ? "left-0.5" : "right-0.5"
+        "absolute z-10 grid h-11 w-11 place-items-center rounded-full border border-black/[0.05] bg-white/85 text-slate-500 backdrop-blur-xl transition-colors duration-200 hover:text-[#ED1846] disabled:pointer-events-none disabled:opacity-0",
+        side === "left" ? "left-1.5" : "right-1.5"
       )}
-      style={{ boxShadow: "0 10px 30px -12px rgba(0,0,0,0.8)" }}
+      style={{ boxShadow: "0 1px 2px rgba(15,23,42,0.10), 0 10px 26px -8px rgba(15,23,42,0.22), 0 3px 10px -3px rgba(237,24,70,0.20)" }}
     >
-      <Icon size={18} weight="bold" />
+      <Icon size={17} weight="bold" />
     </motion.button>
   );
 }

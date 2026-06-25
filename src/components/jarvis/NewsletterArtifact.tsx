@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { DownloadSimple, Copy, Check, EnvelopeSimple } from "@phosphor-icons/react";
+import { DownloadSimple, Copy, Check } from "@phosphor-icons/react";
 import type { NewsletterArtifactData } from "@/lib/jarvis-events";
+import { DeliverableEyebrow } from "./DeliverableEyebrow";
 
 const slugify = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "newsletter";
@@ -44,10 +45,8 @@ export default function NewsletterArtifact({ data }: { data: NewsletterArtifactD
       {/* subject bar */}
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/[0.07] px-4 py-2.5">
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-rose-300/85">
-            <EnvelopeSimple size={12} weight="fill" /> Newsletter
-          </div>
-          <div className="truncate text-[13px] font-semibold text-white/90">{data.subject}</div>
+          <DeliverableEyebrow />
+          <div className="mt-0.5 truncate text-[13px] font-semibold text-white/90">{data.subject}</div>
           {data.preview && <div className="truncate text-[11px] text-white/40">{data.preview}</div>}
         </div>
         <div className="flex shrink-0 items-center gap-2">

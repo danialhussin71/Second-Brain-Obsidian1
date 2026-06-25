@@ -143,11 +143,11 @@ export default function DashboardPage() {
           <ConnectedApps />
         </Rise>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Rise delay={0.1} className="lg:col-span-2">
+        <div className="mt-4 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3">
+          <Rise delay={0.1} className="h-full lg:col-span-2">
             <EngagementGraph li={li} loading={loading && !li} />
           </Rise>
-          <Rise delay={0.14}>
+          <Rise delay={0.14} className="h-full">
             <MeetingsPanel meetings={meetings} loading={loading} />
           </Rise>
         </div>
@@ -281,19 +281,19 @@ function EngagementGraph({ li, loading }: { li?: LinkedInMetrics; loading?: bool
   return (
     <Panel title="Engagement trend" subtitle="Reactions + comments + reposts · last 28 posts" accent="#d946ef" glow="#d946ef" className="h-full">
       {loading || !li ? (
-        <div className="flex flex-col gap-3 pt-1">
-          <div className="lead-shimmer h-[150px] w-full rounded-xl" />
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="lead-shimmer w-full flex-1 rounded-xl" />
           <div className="lead-shimmer h-3 w-1/2" />
         </div>
       ) : (
-        <>
+        <div className="flex min-h-0 flex-1 flex-col">
           <SparkArea series={li.series ?? []} avg={li.avgEngagement} />
-          <div className="mt-3 grid grid-cols-3 gap-2.5">
+          <div className="mt-3 grid shrink-0 grid-cols-3 gap-2.5">
             <GraphStat icon={Heart} color="#fb7185" label="Reactions" value={fmtCompact(li.reactions)} />
             <GraphStat icon={ChatCircle} color="#22d3ee" label="Comments" value={fmtCompact(li.comments)} />
             <GraphStat icon={ShareNetwork} color="#34d399" label="Reposts" value={fmtCompact(li.shares)} />
           </div>
-        </>
+        </div>
       )}
     </Panel>
   );
@@ -301,17 +301,17 @@ function EngagementGraph({ li, loading }: { li?: LinkedInMetrics; loading?: bool
 
 function SparkArea({ series, avg }: { series: number[]; avg: number }) {
   const w = 600;
-  const h = 156;
-  const pad = 8;
+  const h = 200;
+  const topInset = 16; // headroom so the peak never touches the top edge
   const data = Array.isArray(series) && series.length > 1 ? series : [0, 0];
   const max = Math.max(...data, 1);
-  const stepX = (w - pad * 2) / (data.length - 1);
-  const pts = data.map((v, i) => [pad + i * stepX, h - pad - (v / max) * (h - pad * 2)] as const);
+  const usableH = h - topInset;
+  // span full width (x: 0 → w) so there's no inset strip on either side
+  const pts = data.map((v, i) => [(i / (data.length - 1)) * w, h - (v / max) * usableH] as const);
   const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
-  const area = `${line} L${pts[pts.length - 1][0].toFixed(1)},${h} L${pts[0][0].toFixed(1)},${h} Z`;
-  const last = pts[pts.length - 1];
+  const area = `${line} L${w},${h} L0,${h} Z`;
   return (
-    <div className="relative h-[156px] w-full overflow-hidden rounded-xl border border-white/[0.06] bg-gradient-to-b from-fuchsia-500/[0.05] to-transparent">
+    <div className="relative min-h-[150px] w-full flex-1 overflow-hidden rounded-xl border border-white/[0.06] bg-gradient-to-b from-fuchsia-500/[0.05] to-transparent">
       <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="h-full w-full">
         <defs>
           <linearGradient id="engFill" x1="0" y1="0" x2="0" y2="1">
@@ -337,11 +337,6 @@ function SparkArea({ series, avg }: { series: number[]; avg: number }) {
           transition={{ duration: 1.15, ease: [0.4, 0, 0.2, 1] }}
         />
       </svg>
-      {/* pulsing marker on the most recent post (positioned in %) */}
-      <span
-        className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-fuchsia-300"
-        style={{ left: `${(last[0] / w) * 100}%`, top: `${(last[1] / h) * 100}%`, boxShadow: "0 0 12px 2px rgba(217,70,239,0.7)" }}
-      />
       <div className="pointer-events-none absolute right-3 top-2.5 rounded-full bg-black/30 px-2.5 py-1 text-[11px] font-medium text-white/60 backdrop-blur">
         avg {avg.toLocaleString()}/post
       </div>

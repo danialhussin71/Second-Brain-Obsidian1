@@ -9,7 +9,6 @@ import {
   LinkedinLogo,
   Envelope,
   WarningCircle,
-  UsersThree,
   CaretDown,
   Sparkle,
   SealCheck,
@@ -21,6 +20,7 @@ import {
 import { toast } from "sonner";
 import type { LeadsArtifactData, LeadRow, LeadEmailStatus } from "@/lib/jarvis-events";
 import { cn } from "@/lib/utils";
+import { DeliverableEyebrow } from "./DeliverableEyebrow";
 
 /**
  * The Leads deliverable — a high-end, live-streaming prospect table. Rows arrive
@@ -129,9 +129,7 @@ export default function LeadsArtifact({ data }: { data: LeadsArtifactData }) {
       {/* header */}
       <div className="flex shrink-0 items-start justify-between gap-3 border-b border-white/8 px-4 py-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300/80">
-            <UsersThree size={11} weight="fill" /> Deliverable · Leads
-          </div>
+          <DeliverableEyebrow />
           <div className="mt-0.5 truncate text-[15px] font-semibold text-white">{data.title}</div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">

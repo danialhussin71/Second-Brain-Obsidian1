@@ -303,7 +303,7 @@ function EmptyState() {
 
 function Suggestions({ onPick }: { onPick: (s: string) => void }) {
   return (
-    <div className="no-scrollbar flex shrink-0 gap-2 overflow-x-auto px-3 pb-1">
+    <div className="no-scrollbar flex shrink-0 gap-2 overflow-x-auto px-3 pb-3 pt-1">
       {SUGGESTIONS.map((s) => (
         <button
           key={s}
