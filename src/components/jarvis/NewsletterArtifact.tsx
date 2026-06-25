@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DownloadSimple, Copy, Check } from "@phosphor-icons/react";
 import type { NewsletterArtifactData } from "@/lib/jarvis-events";
 import { DeliverableEyebrow } from "./DeliverableEyebrow";
@@ -14,6 +14,13 @@ const slugify = (s: string) =>
  */
 export default function NewsletterArtifact({ data }: { data: NewsletterArtifactData }) {
   const [copied, setCopied] = useState(false);
+  // the iframe can take a beat to paint a big HTML email — show a loader until it does
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    setLoaded(false);
+    const t = setTimeout(() => setLoaded(true), 8000); // safety net if onLoad never fires
+    return () => clearTimeout(t);
+  }, [data.html]);
 
   const copyHtml = async () => {
     try {
@@ -60,13 +67,26 @@ export default function NewsletterArtifact({ data }: { data: NewsletterArtifactD
       </div>
 
       {/* the email, rendered isolated on its own light canvas */}
-      <div className="min-h-0 flex-1 overflow-hidden p-3">
+      <div className="relative min-h-0 flex-1 overflow-hidden p-3">
         <iframe
           title="Newsletter preview"
           srcDoc={data.html}
           sandbox="allow-same-origin"
+          onLoad={() => setLoaded(true)}
           className="h-full w-full rounded-xl border border-white/10 bg-white shadow-[0_18px_50px_-26px_rgba(0,0,0,0.7)]"
         />
+        {!loaded && (
+          <div className="absolute inset-3 flex flex-col items-center justify-center gap-3 rounded-xl border border-white/10 bg-white">
+            <div className="relative h-9 w-9">
+              <div className="absolute inset-0 rounded-full border-2 border-slate-200" />
+              <div
+                className="absolute inset-0 animate-spin rounded-full border-2 border-transparent"
+                style={{ borderTopColor: "#ED1846", filter: "drop-shadow(0 0 6px rgba(237,24,70,0.55))" }}
+              />
+            </div>
+            <div className="text-[12.5px] font-medium text-slate-500">Rendering the newsletter…</div>
+          </div>
+        )}
       </div>
     </div>
   );
