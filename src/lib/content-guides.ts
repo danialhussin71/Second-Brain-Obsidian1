@@ -47,6 +47,7 @@ const FORMAT_CATEGORIES: Record<string, string[]> = {
   carousel: ["carousel", "cheatsheet"],
   picture: ["carousel", "cheatsheet", "text"],
   text: ["text"],
+  newsletter: ["newsletter"],
   // video scripts have no dedicated guide in the playbook
   reels: [],
   longform: [],

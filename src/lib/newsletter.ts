@@ -15,6 +15,8 @@ export type NewsletterContent = {
   quote?: string;
   cta: { label: string; url: string };
   signoff: string;
+  /** one-line P.S. after the sign-off (playbook step 8: restate the action or add intrigue) */
+  ps?: string;
   /** generated image assets (data URLs); optional */
   heroImage?: string;
   inlineImage?: string;
@@ -107,6 +109,14 @@ export function buildNewsletterHtml(kit: BrandKit | null, c: NewsletterContent):
        </td></tr></table>`
     : "";
 
+  const ps = c.ps?.trim()
+    ? `<tr><td class="nl-pad" style="padding:0 56px 32px;text-align:left;">
+         <p style="margin:0;font-family:${sans};font-size:14px;line-height:1.66;color:${muted};"><span style="color:${accent};font-weight:600;">P.S.</span> ${esc(
+        c.ps.trim()
+      )}</p>
+       </td></tr>`
+    : "";
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -177,6 +187,7 @@ export function buildNewsletterHtml(kit: BrandKit | null, c: NewsletterContent):
           <tr><td class="nl-pad" style="padding:24px 56px 36px;text-align:left;">
             <p style="margin:0;font-family:${display};font-style:italic;font-size:18px;color:${ink};">${esc(c.signoff || `— ${name.split(" ")[0]}`)}</p>
           </td></tr>
+          ${ps}
           <!-- footer (centered) -->
           <tr><td align="center" style="border-top:1px solid ${line};padding:24px 40px 30px;">
             <p style="margin:0;font-family:${sans};font-size:12px;line-height:1.7;color:${muted};">

@@ -410,7 +410,7 @@ async function runCarousel(
 
 const NewsletterSchema = z.object({
   kicker: z.string().describe("a short eyebrow label shown above the title, e.g. 'The Founder's Note' or 'Weekly note'"),
-  subject: z.string().describe("the email subject line — specific, benefit- or curiosity-driven, never clickbait"),
+  subject: z.string().describe("the email subject line — UNDER 42 characters, specific, curiosity- or benefit-driven, never clickbait, and never repeated by the preview"),
   preview: z.string().describe("inbox preview text (~60-90 chars) that complements the subject"),
   title: z.string().describe("the headline shown at the top of the email body — short and punchy"),
   intro: z.string().describe("a personal opening, 2-3 SHORT paragraphs (blank line between each), written to ONE reader in Danny's voice"),
@@ -421,7 +421,7 @@ const NewsletterSchema = z.object({
         body: z
           .string()
           .describe(
-            "1-3 short paragraphs. Use Markdown structure where it genuinely helps readability: '- ' at line start for a bullet list, '### ' for a subheading, and **bold** for key phrases. Do not over-format."
+            "1-3 short paragraphs of plain prose. NO markdown bold (the playbook bans bolding inside the body). A '- ' bullet list or a '### ' subheading is allowed ONLY where it genuinely earns its place. Do not over-format."
           ),
       })
     )
@@ -429,7 +429,8 @@ const NewsletterSchema = z.object({
     .max(4),
   quote: z.string().nullable().describe("ONE short, punchy pull-quote (a single memorable sentence) to feature centered, or null if none fits"),
   cta: z.object({ label: z.string().describe("a VERY short button label — 2-4 words, max ~24 characters — so it fits on ONE line in the button, e.g. 'Reply and tell me'"), url: z.string().describe("a real URL, or '#' if none was given") }),
-  signoff: z.string().describe("the sign-off line, e.g. '— Daniel'"),
+  signoff: z.string().describe("the sign-off line, e.g. 'Talk soon, Daniel'"),
+  ps: z.string().nullable().describe("the P.S. (playbook structure step 8): ONE line after the sign-off that restates the single action a different way or adds intrigue. Not a summary. null only if it genuinely adds nothing."),
   heroPrompt: z
     .string()
     .describe(
@@ -466,12 +467,16 @@ async function runNewsletter(
   emit({ type: "agent.status", node: "newsletter", status: "Matching your voice", at: now() });
   const voice = await readDoc("voice-dna", "newsletter", emit, grounding);
 
-  // The newsletter playbook lives in the founder's second brain (vault note).
+  // The newsletter playbook lives in the content-guides vector DB (one full master
+  // prompt per format, retrieved by task) — the same system the carousel uses. Falls
+  // back to a vault note if the guide isn't seeded.
   emit({ type: "agent.status", node: "newsletter", status: "Reading your newsletter playbook", at: now() });
-  const guide = await readVaultNote("newsletter-structure");
-  if (guide.found) {
-    grounding.push("vault: newsletter-structure");
-    emit({ type: "agent.tool", node: "newsletter", tool: "Second Brain", detail: "newsletter-structure", at: now() });
+  const cg = await getContentGuide({ format: "newsletter", task: `${instruction}\n\n${brief}` });
+  const vaultGuide = cg ? null : await readVaultNote("newsletter-structure");
+  const playbook = (cg?.body || vaultGuide?.content || "").trim();
+  if (playbook) {
+    grounding.push(cg ? `content-guide: ${cg.title}` : "vault: newsletter-structure");
+    emit({ type: "agent.tool", node: "newsletter", tool: cg ? "Content guide" : "Second Brain", detail: cg?.title || "newsletter-structure", at: now() });
     await beat(220);
   }
 
@@ -507,10 +512,10 @@ async function runNewsletter(
       maxRetries: 1,
       system:
         "You are Danny's Newsletter specialist." +
-        (guide.found
-          ? `\n\nFollow this NEWSLETTER PLAYBOOK from the founder's own knowledge base — it is authoritative. Apply its core principle, structure, and rules:\n\n${(guide.content || "").slice(0, 7000)}\n\n---\n`
+        (playbook
+          ? `\n\nFollow this NEWSLETTER PLAYBOOK from the founder's own knowledge base — it is authoritative. Apply its ROLE, voice rules (the banned words and structures to break), the 8-part newsletter structure, and the final self-check:\n\n${playbook.slice(0, 7000)}\n\n---\n`
           : "") +
-        `\n\nWrite ONE complete email newsletter in Danny's EXACT voice. It must read like a private note to ONE person, not a broadcast: personal, specific, genuinely useful. Solve one real problem or shift one belief, then sell softly with a single clear CTA at the end. Structure it cleanly for skim-reading: a short kicker, a punchy title, 2-4 scannable sections, the occasional bullet list or '### ' subheading ONLY where it earns its place, and ONE pull-quote if a sentence deserves the spotlight. Elegant and uncluttered, never busy. Short paragraphs. No corporate filler, no hashtag spam, never invent metrics.\n\nAlso act as ART DIRECTOR for the image assets: invent ONE concrete, purpose-built visual CONCEPT for the hero (and optionally a second for inline) that VISUALIZES a real idea from THIS specific newsletter — a metaphor or scene with specific objects, the kind a brand studio would design. Say exactly what is in the frame. Never generic office/laptop/handshake stock, never a vague mood.\n\n` +
+        `\n\nWrite ONE complete email newsletter in Danny's EXACT voice. It must read like a private note to ONE person, not a broadcast: personal, specific, genuinely useful. Solve one real problem or shift one belief, then sell softly with a single clear CTA at the end. Follow the playbook's structure, mapped onto these fields: the TITLE is the hook, the INTRO carries the hook plus the tension (the exact problem the reader feels this week), the SECTIONS deliver THE ONE THING and THE PROOF (a real number, name, or moment), the CTA is THE ASK (one line, one action, phrased like a friend asking a favor), and ALWAYS finish with a P.S. (one line that restates the action a different way or adds intrigue). Keep the subject UNDER 42 characters. A short kicker eyebrow is fine; use 2-4 scannable sections and a bullet list or '### ' subheading ONLY where it earns its place. A pull-quote is OPTIONAL, only if one sentence truly deserves the spotlight. Short paragraphs, plain prose, NO markdown bold in the body, no corporate filler, no hashtag spam, never invent metrics.\n\nAlso act as ART DIRECTOR for the image assets: invent ONE concrete, purpose-built visual CONCEPT for the hero (and optionally a second for inline) that VISUALIZES a real idea from THIS specific newsletter — a metaphor or scene with specific objects, the kind a brand studio would design. Say exactly what is in the frame. Never generic office/laptop/handshake stock, never a vague mood.\n\n` +
         NO_EMDASH_RULE,
       prompt:
         `Request: "${instruction}"\n\n` +
@@ -528,6 +533,7 @@ async function runNewsletter(
       quote: o.quote ?? undefined,
       cta: o.cta,
       signoff: o.signoff,
+      ps: o.ps ?? undefined,
     };
     heroPrompt = o.heroPrompt;
     inlinePrompt = o.inlinePrompt ?? null;
