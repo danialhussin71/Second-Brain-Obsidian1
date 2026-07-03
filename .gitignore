@@ -9,3 +9,17 @@ next-env.d.ts
 .calendar-watcher-state.json
 .librarian-state.json
 scripts/.distill-batch-build.json
+
+# Mission Control dashboard (local, per-user — never commit)
+mission-control/.dashboard/config.local.json
+mission-control/.dashboard/activity.jsonl
+mission-control/.dashboard/linkedin.json
+mission-control/.obsidian/workspace.json
+mission-control/.obsidian/workspace-mobile.json
+mission-control/.trash/
+
+# Claude Code mission-control run scratch
+.jarvis-code/
+
+# Electron packaging output
+dist-electron/

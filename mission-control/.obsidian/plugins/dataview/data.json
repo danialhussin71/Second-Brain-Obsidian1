@@ -1,0 +1,13 @@
+{
+  "enableDataviewJs": true,
+  "enableInlineDataviewJs": true,
+  "prettyRenderInlineFields": true,
+  "prettyRenderInlineFieldsInLivePreview": true,
+  "refreshEnabled": false,
+  "refreshInterval": 5000,
+  "renderNullAs": "\\-",
+  "warnOnEmptyResult": false,
+  "tableIdColumnName": "File",
+  "defaultDateFormat": "MMMM dd, yyyy",
+  "defaultDateTimeFormat": "h:mm a - MMMM dd, yyyy"
+}

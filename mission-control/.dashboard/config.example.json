@@ -1,0 +1,12 @@
+{
+  "supabaseUrl": "https://YOUR-PROJECT.supabase.co",
+  "supabaseAnonKey": "YOUR_ANON_KEY",
+  "serviceRoleKey": "YOUR_SERVICE_ROLE_KEY (optional; unlocks all mission-control data)",
+  "authMode": "service_role",
+  "owner": { "email": "you@example.com", "password": "" },
+  "vaultClient": null,
+  "appBaseUrl": "http://localhost:3000",
+  "realtime": true,
+  "pollMs": 4000,
+  "activityRefreshMs": 1500
+}

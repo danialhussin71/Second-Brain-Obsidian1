@@ -1,0 +1,30 @@
+/* Mission Control — full-bleed dark styling for dashboard notes.
+   Applied only to notes whose frontmatter has:  cssclasses: [mc-dash]  */
+
+.markdown-preview-view.mc-dash,
+.markdown-source-view.mod-cm6.mc-dash .cm-sizer {
+  max-width: none !important;
+}
+
+.markdown-preview-view.mc-dash .markdown-preview-sizer,
+.markdown-preview-view.mc-dash {
+  padding: 0 !important;
+  max-width: none !important;
+  background: #02040a;
+}
+
+/* Hide the title / properties chrome so the panels own the whole view */
+.mc-dash .inline-title,
+.mc-dash .frontmatter,
+.mc-dash .metadata-container,
+.mc-dash .frontmatter-container { display: none !important; }
+
+/* Let the injected dashboard control all spacing */
+.mc-dash .block-language-dataviewjs { margin: 0 !important; }
+.mc-dash .markdown-preview-sizer > div { margin: 0 !important; }
+
+/* Remove the default padding around the reading view for our dashboards */
+.workspace-leaf-content[data-type="markdown"] .view-content:has(.mc-dash) {
+  padding: 0 !important;
+  background: #02040a;
+}

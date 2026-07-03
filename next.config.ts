@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // For the Electron desktop build we emit a self-contained Node server
+  // (`.next/standalone/server.js`) that the app shell boots on a local port.
+  // Left undefined for the normal web build so nothing about Vercel/dev changes.
+  output: process.env.BUILD_TARGET === "electron" ? "standalone" : undefined,
   experimental: {
     serverActions: { bodySizeLimit: "4mb" },
   },
